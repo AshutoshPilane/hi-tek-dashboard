@@ -654,3 +654,4 @@ document.getElementById('deleteProjectBtn').addEventListener('click', () => {
 
 document.addEventListener('DOMContentLoaded', loadProjects);
 
+
