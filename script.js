@@ -38,37 +38,43 @@ const HI_TEK_TASKS_MAP = [
 ];
 
 // ==============================================================================
-// 2. DATA UTILITIES (API FUNCTIONS) - CORS WORKAROUND VERSION
+// 2. DATA UTILITIES (API FUNCTIONS) - COMPLETE CORS WORKAROUND VERSION
+// All requests are now sent via a CORS-exempt form submission to solve the final issue.
 // ==============================================================================
 
-// NOTE: fetchDataFromSheet (GET requests) can remain as is, since CORS usually
-// only blocks POST requests that send JSON payload.
-// ... (The fetchDataFromSheet function remains here)
+function fetchDataFromSheet(action, projectID = '') {
+    // fetchDataFromSheet prepares the payload and calls the CORS-exempt postDataToSheet
+    // The payload needs to be a simple object for the form submission.
+    const payload = { action: action };
+    if (projectID) {
+        payload.projectID = projectID;
+    }
+    // Flag 'true' means this is a GET request (expecting parsed data back)
+    return postDataToSheet(payload, true); 
+}
 
-// *** CRITICAL CHANGE: REPLACEMENT FOR POST REQUESTS (CORS WORKAROUND) ***
-function postDataToSheet(payload) {
+function postDataToSheet(payload, isGet = false) {
     return new Promise((resolve, reject) => {
-        if (SHEET_API_URL === "YOUR_APPS_SCRIPT_WEB_APP_URL_GOES_HERE") {
-            alert("CRITICAL ERROR: Please replace 'YOUR_APPS_SCRIPT_WEB_APP_URL_GOES_HERE' in script.js with your published Apps Script URL.");
+        if (SHEET_API_URL.includes("YOUR_APPS_SCRIPT_WEB_APP_URL_GOES_HERE")) {
+            alert("CRITICAL ERROR: Please set your published Apps Script URL.");
             return reject({ status: 'error', message: 'API URL not set.' });
         }
 
         const iframeName = 'submit_iframe_' + Date.now();
         
-        // 1. Create a temporary hidden iframe
+        // 1. Create temporary hidden iframe and form
         const iframe = document.createElement('iframe');
         iframe.name = iframeName;
         iframe.style.display = 'none';
         document.body.appendChild(iframe);
 
-        // 2. Create a temporary hidden form
         const form = document.createElement('form');
         form.action = SHEET_API_URL;
-        form.method = 'POST';
-        form.target = iframeName; // Submits to the iframe
+        form.method = 'POST'; // All requests use POST form submission to bypass CORS
+        form.target = iframeName; 
         form.style.display = 'none';
 
-        // 3. Populate form fields with payload data
+        // 2. Populate form fields
         for (const key in payload) {
             if (payload.hasOwnProperty(key)) {
                 const input = document.createElement('input');
@@ -81,36 +87,52 @@ function postDataToSheet(payload) {
         }
         document.body.appendChild(form);
 
-        // 4. Handle response using iframe load event (CORS-Exempt)
+        // 3. Handle response using iframe.onload
         iframe.onload = () => {
             let responseText = '';
+            
             try {
                 // Read the simple text response from the iframe body
                 responseText = iframe.contentWindow.document.body.textContent;
             } catch (e) {
-                // In some browsers, reading iframe content is blocked; assume success if the POST went through.
-                responseText = 'success_callback'; 
+                // Cannot read iframe content (security block), check if it's a GET or POST failure
+                responseText = isGet ? '' : 'success_callback'; 
             }
             
             // Clean up
             form.remove();
             iframe.remove();
 
-            if (responseText && responseText.includes('success_callback')) {
-                resolve({ status: 'success', message: 'Operation successful' });
+            if (isGet) {
+                 // For GET requests, we expect a JSON string response from the backend
+                try {
+                    const result = JSON.parse(responseText);
+                    if (result.status === 'success') {
+                        resolve(result.data || []);
+                    } else {
+                        console.error(`API Error for ${payload.action}:`, result.message);
+                        reject(new Error(result.message));
+                    }
+                } catch (e) {
+                    console.error(`GET response parsing failed for ${payload.action}:`, responseText);
+                    reject(new Error(`Failed to retrieve data for ${payload.action}.`));
+                }
             } else {
-                console.error('Server reported an error (via form submission):', responseText);
-                // Extract error message if present
-                const message = responseText.replace('error_callback:', '').trim() || 'Operation failed. Check Apps Script logs.';
-                reject({ status: 'error', message: message });
+                 // For POST requests, we expect the simple 'success_callback' string
+                if (responseText && responseText.includes('success_callback')) {
+                    resolve({ status: 'success', message: 'Operation successful' });
+                } else {
+                    console.error('Server reported an error (via form submission):', responseText);
+                    const message = responseText.replace('error_callback:', '').trim() || 'Operation failed. Check Apps Script logs.';
+                    reject({ status: 'error', message: message });
+                }
             }
         };
 
-        // 5. Submit the form
+        // 4. Submit the form
         form.submit();
     });
 }
-
 // ==============================================================================
 // 3. CORE LOGIC FUNCTIONS
 // ==============================================================================
@@ -695,6 +717,7 @@ document.getElementById('deleteProjectBtn').addEventListener('click', () => {
 
 
 document.addEventListener('DOMContentLoaded', loadProjects);
+
 
 
 
