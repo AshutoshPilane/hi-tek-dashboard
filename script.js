@@ -651,4 +651,5 @@ document.getElementById('deleteProjectBtn').addEventListener('click', () => {
 // 5. INITIALIZATION
 // ==============================================================================
 
+
 document.addEventListener('DOMContentLoaded', loadProjects);
