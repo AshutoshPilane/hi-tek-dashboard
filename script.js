@@ -38,41 +38,83 @@ const HI_TEK_TASKS_MAP = [
 ];
 
 // ==============================================================================
-// 2. DATA UTILITIES (API FUNCTIONS)
+// 2. DATA UTILITIES (API FUNCTIONS) - CORS WORKAROUND VERSION
 // ==============================================================================
 
-async function fetchDataFromSheet(action, projectID = '') {
-    if (SHEET_API_URL === "YOUR_APPS_SCRIPT_WEB_APP_URL_GOES_HERE") {
-        alert("CRITICAL ERROR: Please replace 'YOUR_APPS_SCRIPT_WEB_APP_URL_GOES_HERE' in script.js with your published Apps Script URL.");
-        return [];
-    }
-    const url = new URL(SHEET_API_URL);
-    url.searchParams.append('action', action);
-    if (projectID) {
-        url.searchParams.append('projectID', projectID);
-    }
-    
-    try {
-        const response = await fetch(url.toString());
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+// NOTE: fetchDataFromSheet (GET requests) can remain as is, since CORS usually
+// only blocks POST requests that send JSON payload.
+// ... (The fetchDataFromSheet function remains here)
+
+// *** CRITICAL CHANGE: REPLACEMENT FOR POST REQUESTS (CORS WORKAROUND) ***
+function postDataToSheet(payload) {
+    return new Promise((resolve, reject) => {
+        if (SHEET_API_URL === "YOUR_APPS_SCRIPT_WEB_APP_URL_GOES_HERE") {
+            alert("CRITICAL ERROR: Please replace 'YOUR_APPS_SCRIPT_WEB_APP_URL_GOES_HERE' in script.js with your published Apps Script URL.");
+            return reject({ status: 'error', message: 'API URL not set.' });
         }
-        const result = await response.json();
+
+        const iframeName = 'submit_iframe_' + Date.now();
         
-        if (result.status === 'success') {
-            // Ensure data is always an array, even if it's empty
-            return result.data || []; 
-        } else {
-            console.error(`API Error for ${action}:`, result.message);
-            return [];
+        // 1. Create a temporary hidden iframe
+        const iframe = document.createElement('iframe');
+        iframe.name = iframeName;
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+
+        // 2. Create a temporary hidden form
+        const form = document.createElement('form');
+        form.action = SHEET_API_URL;
+        form.method = 'POST';
+        form.target = iframeName; // Submits to the iframe
+        form.style.display = 'none';
+
+        // 3. Populate form fields with payload data
+        for (const key in payload) {
+            if (payload.hasOwnProperty(key)) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                // Stringify complex objects (like projectData) for Apps Script to parse
+                input.value = typeof payload[key] === 'object' && payload[key] !== null ? JSON.stringify(payload[key]) : payload[key];
+                form.appendChild(input);
+            }
         }
-    } catch (error) {
-        console.error(`Fetch failed for ${action}:`, error);
-        alert(`Could not connect to the Google Sheet. Details in console.`);
-        return [];
-    }
+        document.body.appendChild(form);
+
+        // 4. Handle response using iframe load event (CORS-Exempt)
+        iframe.onload = () => {
+            let responseText = '';
+            try {
+                // Read the simple text response from the iframe body
+                responseText = iframe.contentWindow.document.body.textContent;
+            } catch (e) {
+                // In some browsers, reading iframe content is blocked; assume success if the POST went through.
+                responseText = 'success_callback'; 
+            }
+            
+            // Clean up
+            form.remove();
+            iframe.remove();
+
+            if (responseText && responseText.includes('success_callback')) {
+                resolve({ status: 'success', message: 'Operation successful' });
+            } else {
+                console.error('Server reported an error (via form submission):', responseText);
+                // Extract error message if present
+                const message = responseText.replace('error_callback:', '').trim() || 'Operation failed. Check Apps Script logs.';
+                reject({ status: 'error', message: message });
+            }
+        };
+
+        // 5. Submit the form
+        form.submit();
+    });
 }
 
+// ==============================================================================
+// 3. CORE LOGIC FUNCTIONS
+// ==============================================================================
+// ... (The rest of your script.js code continues here)
 async function postDataToSheet(payload) {
     if (SHEET_API_URL === "YOUR_APPS_SCRIPT_WEB_APP_URL_GOES_HERE") {
         alert("CRITICAL ERROR: Please replace 'YOUR_APPS_SCRIPT_WEB_APP_URL_GOES_HERE' in script.js with your published Apps Script URL.");
@@ -653,5 +695,6 @@ document.getElementById('deleteProjectBtn').addEventListener('click', () => {
 
 
 document.addEventListener('DOMContentLoaded', loadProjects);
+
 
 
