@@ -5,7 +5,8 @@
 
 // 🎯 CRITICAL: PASTE YOUR NEW VERIFIED APPS SCRIPT URL HERE!
 // !!! REPLACE THIS PLACEHOLDER AFTER PUBLISHING YOUR GOOGLE APPS SCRIPT !!!
-const SHEET_API_URL = "https://script.google.com/macros/s/AKfycbxPem8Y-rANmN6hc2tyuCd1O1lgUoCVwYHn4mV8K1-QwhVkWSCzjf_k7WQkCh8_gcEnMw/s"; 
+// NOTE: Renamed variable to match usage in postDataToSheet
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxPem8Y-rANmN6hc2tyuCd1O1lgUoCVwYHn4mV8K1-QwhVkWSCzjf_k7WQkCh8_gcEnMw/s"; 
 
 let currentProjectID = null; 
 let allProjects = [];
@@ -42,16 +43,6 @@ const HI_TEK_TASKS_MAP = [
 // All data traffic uses the CORS-exempt form submission method.
 // ==============================================================================
 
-function fetchDataFromSheet(action, projectID = '') {
-    // fetchDataFromSheet prepares the payload and calls the CORS-exempt postDataToSheet
-    const payload = { action: action };
-    if (projectID) {
-        payload.projectID = projectID;
-    }
-    // Flag 'true' means this is a GET/Read request (expecting parsed JSON data back)
-    return postDataToSheet(payload, true); 
-}
-
 /**
  * Main function to communicate with the Google Apps Script Web App.
  * Uses a hidden iframe/form submission technique to bypass CORS restrictions.
@@ -63,7 +54,7 @@ function postDataToSheet(payload, isGet = false) {
     return new Promise((resolve, reject) => {
         // 1. Create a dynamic form and iframe
         const form = document.createElement('form');
-        form.action = APPS_SCRIPT_URL; // Use the URL with the /s endpoint
+        form.action = APPS_SCRIPT_URL; // Uses the /s endpoint URL
         form.method = 'POST';
         form.target = 'iframe_upload';
         form.style.display = 'none';
@@ -89,12 +80,11 @@ function postDataToSheet(payload, isGet = false) {
             let responseText = '';
             
             try {
-                // With the /s URL, reading the content should now work.
+                // Reading content should now work with the /s URL
                 responseText = iframe.contentWindow.document.body.textContent;
             } catch (e) {
-                // This catch handles unexpected security errors, though rare with /s
+                // Fallback for unexpected security issues
                 console.warn("Iframe content reading failed unexpectedly. Using fallback.", e);
-                // Fallback: Use the expected success string for POST, or empty for GET
                 responseText = isGet ? '' : 'success_callback'; 
             }
             
@@ -151,10 +141,7 @@ function fetchDataFromSheet(action, projectID = '') {
     };
     return postDataToSheet(payload, true);
 }
-        // 4. Submit the form
-        form.submit();
-    });
-}
+
 
 // ==============================================================================
 // 3. CORE LOGIC FUNCTIONS
@@ -166,7 +153,10 @@ async function loadProjects() {
     const selector = document.getElementById('projectSelector');
     selector.innerHTML = ''; 
     
-    const validProjects = allProjects.filter(project => String(project.ProjectID).trim());
+    // CRITICAL FIX: Ensure allProjects is an array before filtering, and check for null/undefined objects
+    const validProjects = (allProjects || []).filter(project => 
+        project && String(project.ProjectID || '').trim()
+    );
 
     if (validProjects.length === 0) {
         selector.innerHTML = '<option value="">-- No Projects Found --</option>';
@@ -507,8 +497,9 @@ document.getElementById('saveProjectDetailsBtn').addEventListener('click', async
         Contact2: document.getElementById('input-contact2').value,
     };
     
-    const payload = { action: 'updateProject', projectID: currentProjectID, data: data };
+    const payload = { action: 'updateProject', projectID: currentProjectID, data: JSON.stringify(data) };
     
+    // NOTE: The data property must be stringified for form submission, fixed in the payload creation here.
     const result = await postDataToSheet(payload); 
 
     if (result.status === 'success') {
@@ -650,22 +641,25 @@ document.getElementById('addProjectBtn').addEventListener('click', async () => {
     // Create a new unique ID
     const newID = 'P' + Date.now().toString().slice(-4); 
     
+    const projectData = {
+        Name: newName, 
+        ProjectID: newID, 
+        StartDate: new Date().toISOString().split('T')[0], 
+        Deadline: new Date().toISOString().split('T')[0], 
+        Location: 'New Site', 
+        Amount: 0,
+        Contractor: 'TBD', 
+        Engineers: 'TBD', 
+        Contact1: '', 
+        Contact2: ''
+    };
+
     const payload = {
         action: 'addProjectWithTasks', 
         projectID: newID,
-        projectData: {
-            Name: newName, 
-            ProjectID: newID, 
-            StartDate: new Date().toISOString().split('T')[0], 
-            Deadline: new Date().toISOString().split('T')[0], 
-            Location: 'New Site', 
-            Amount: 0,
-            Contractor: 'TBD', 
-            Engineers: 'TBD', 
-            Contact1: '', 
-            Contact2: ''
-        },
-        defaultTasks: HI_TEK_TASKS_MAP 
+        // CRITICAL: Must JSON.stringify non-simple form data for the backend to parse
+        projectData: JSON.stringify(projectData), 
+        defaultTasks: JSON.stringify(HI_TEK_TASKS_MAP) 
     };
     
     const result = await postDataToSheet(payload);
@@ -699,17 +693,3 @@ document.getElementById('deleteProjectBtn').addEventListener('click', () => {
 
 
 document.addEventListener('DOMContentLoaded', loadProjects);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
