@@ -106,7 +106,7 @@ function postDataToSheet(payload, isGet = false) {
             if (isGet) {
                  // For GET/Read requests, we expect a JSON string response from the backend
                 try {
-                    const result = JSON.parse(responseText);
+                    const result = JSON.parse(responseText.trim());
                     if (result.status === 'success') {
                         resolve(result.data || []);
                     } else {
@@ -677,6 +677,7 @@ document.getElementById('deleteProjectBtn').addEventListener('click', () => {
 
 
 document.addEventListener('DOMContentLoaded', loadProjects);
+
 
 
 
