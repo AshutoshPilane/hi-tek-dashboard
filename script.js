@@ -1,8 +1,3 @@
-// ==============================================================================
-// script.js: ONLINE VERSION (Google Sheet API Integration)
-// FINAL VERSION WITH ALL KNOWN CLIENT-SIDE FIXES
-// ==============================================================================
-
 // 🎯 CRITICAL: PASTE YOUR NEW VERIFIED APPS SCRIPT URL HERE!
 // MUST be the URL from the 'Web app' deployment that has 'Anyone' access.
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxPem8Y-rANmN6hc2tyuCd1O1lgUoCVwYHn4mV8K1-QwhVkWSCzjf_k7WQkCh8_gcEnMw/s"; 
@@ -157,17 +152,6 @@ function fetchDataFromSheet(action, projectID = '') {
         return []; // Return empty array on fetch failure
     });
 }
-
-// ... (Rest of the script.js remains the same as the previous version) ...
-// The rest of the functions (loadProjects, renderDashboard, handleProjectSelectionChange, etc.) 
-// should be appended here. Since they were provided in the previous step and only the 
-// postDataToSheet function had the critical security/error handling changes, 
-// you can copy them from the last complete script.js version you had.
-// ...
-
-// ------------------- (REST OF script.js CODE HERE) -------------------
-// (All functions like loadProjects, renderDashboard, and all event listeners should follow)
-// ---------------------------------------------------------------------
 
 async function loadProjects() {
     allProjects = await fetchDataFromSheet('getProjects');
@@ -522,7 +506,7 @@ document.getElementById('saveProjectDetailsBtn').addEventListener('click', async
             alert(`Failed to save project details: ${result.message}`);
         }
     } catch(error) {
-         alert(`Failed to save project details: ${error.message}. Check console for Apps Script 500 errors.`);
+          alert(`Failed to save project details: ${error.message}. Check console for Apps Script 500 errors.`);
     }
 });
 
@@ -649,7 +633,7 @@ document.getElementById('recordDispatchForm').addEventListener('submit', async (
             alert(`Failed to record dispatch: ${result.message}`);
         }
     } catch(error) {
-         alert(`Failed to record dispatch: ${error.message}. Check console for Apps Script 500 errors.`);
+          alert(`Failed to record dispatch: ${error.message}. Check console for Apps Script 500 errors.`);
     }
 });
 
@@ -714,4 +698,3 @@ document.getElementById('deleteProjectBtn').addEventListener('click', () => {
 
 
 document.addEventListener('DOMContentLoaded', loadProjects);
-
