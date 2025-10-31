@@ -5,7 +5,7 @@
 
 // 🎯 CRITICAL: PASTE YOUR NEW VERIFIED APPS SCRIPT URL HERE!
 // !!! REPLACE THIS PLACEHOLDER AFTER PUBLISHING YOUR GOOGLE APPS SCRIPT !!!
-const SHEET_API_URL = "https://script.google.com/macros/s/AKfycbx_Ten6jGGb6BcHiYMxOXPt2eKqzZQ2TyKxOXCNqi1FWz1wbhtMFdjTZux3MVKLJeO0Cg/exec"; 
+const SHEET_API_URL = "https://script.google.com/macros/s/AKfycbwBbxRIV0e8xUC-Ic4IYJjWRFagLQkZ-w0r5C6pwNysxMldeKw9fkQwm9vOJXyihwyqbA/exec"; 
 
 let currentProjectID = null; 
 let allProjects = [];
@@ -652,4 +652,5 @@ document.getElementById('deleteProjectBtn').addEventListener('click', () => {
 // ==============================================================================
 
 document.addEventListener('DOMContentLoaded', loadProjects);
+
 
