@@ -3,9 +3,9 @@
 // Data is fetched from and sent to the live Google Sheet via a Web App.
 // ==============================================================================
 
-// 🎯 CRITICAL: PASTE YOUR NEW VERIFIED APPS SCRIPT URL HERE!
-// The URL below is taken from your console error log, ensuring we test the right endpoint.
-const SHEET_API_URL = "https://script.google.com/macros/s/AKfycbzwxLHSpJ9xQTKfc2wUQaIFzuUeWCxHqAXwueaf4jFXPdAYTTYPvQ_dJHzbZ9-MOkxQ/exec"; 
+// 🎯 CRITICAL: This URL is now a RELATIVE path that hits the Netlify Proxy/Redirect rule.
+// Netlify will forward this request to the actual Google Apps Script URL defined in the _redirects file.
+const SHEET_API_URL = "/api/exec"; 
 
 let currentProjectID = null; 
 let allProjects = [];
@@ -57,10 +57,7 @@ class ApiError extends Error {
  */
 async function postDataToSheet(data) {
     try {
-        if (SHEET_API_URL.includes("YOUR_APPS_SCRIPT_URL_HERE")) {
-            throw new ApiError("SHEET_API_URL has not been updated.", { url: SHEET_API_URL });
-        }
-
+        // Use the relative path (e.g., /api/exec) which will be proxied by Netlify
         const response = await fetch(SHEET_API_URL, {
             method: 'POST',
             mode: 'cors', // Crucial for cross-origin requests
@@ -70,7 +67,7 @@ async function postDataToSheet(data) {
 
         // Check if the HTTP response itself was successful (status 200-299)
         if (!response.ok) {
-            console.error(`[Hi Tek API Error] HTTP Error Status: ${response.status} ${response.statusText}. Check if the Apps Script URL is correct and deployed as a Web App.`);
+            console.error(`[Hi Tek API Error] HTTP Error Status: ${response.status} ${response.statusText}. Check if the Apps Script URL in _redirects is correct.`);
             throw new ApiError(`HTTP Error: ${response.status} ${response.statusText}`, { status: response.status });
         }
 
@@ -93,8 +90,8 @@ async function postDataToSheet(data) {
         
         // Catch general network or JSON parsing errors
         console.error('[Hi Tek API Error] Network or Parsing Failure:', error.message);
-        console.warn('Common Fixes: 1. Ensure Apps Script is deployed as a Web App. 2. Verify the URL ends in /exec. 3. Check for CORS/Mixed Content warnings in the console. (The current error is a CORS failure which needs the Code.gs fix below!)');
-        throw new ApiError("Could not connect to the Google Sheet. Details in console. Please apply the Code.gs fix below.", { originalError: error.message });
+        console.warn('Common Fixes: 1. Ensure Netlify/Vercel proxy is configured via _redirects. 2. Verify the Apps Script is deployed as "Anyone".');
+        throw new ApiError("Could not connect to the Google Sheet.", { originalError: error.message });
     }
 }
 
@@ -116,6 +113,7 @@ function displayError(message) {
             msgElement.classList.remove('error');
         }, 8000);
     } else {
+        // Fallback for demonstration environment
         alert(message);
     }
 }
@@ -538,4 +536,3 @@ document.getElementById('deleteProjectBtn').addEventListener('click', () => {
 // ==============================================================================
 
 document.addEventListener('DOMContentLoaded', loadProjects);
-
