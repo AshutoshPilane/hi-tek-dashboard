@@ -3,8 +3,8 @@
 // Data is fetched from and sent to the live Google Sheet via a Web App.
 // ==============================================================================
 
-// 🎯 CRITICAL: This URL is now a RELATIVE path that hits the Netlify Proxy/Redirect rule.
-// Netlify will forward this request to the actual Google Apps Script URL defined in the _redirects file.
+// 🎯 CRITICAL: This is the local proxy path handled by Netlify's _redirects file.
+// The Netlify configuration will secretly forward this request to the long Google URL.
 const SHEET_API_URL = "/api/exec"; 
 
 let currentProjectID = null; 
@@ -534,5 +534,6 @@ document.getElementById('deleteProjectBtn').addEventListener('click', () => {
 // ==============================================================================
 // 5. INITIALIZATION
 // ==============================================================================
+
 
 document.addEventListener('DOMContentLoaded', loadProjects);
