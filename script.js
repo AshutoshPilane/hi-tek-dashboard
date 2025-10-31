@@ -5,7 +5,7 @@
 
 // 🎯 CRITICAL: PASTE YOUR NEW VERIFIED APPS SCRIPT URL HERE!
 // MUST be the URL from the 'Web app' deployment that has 'Anyone' access.
-const APPS_SCRIPT_URL = "YOUR_NEW_APPS_SCRIPT_WEB_APP_URL_HERE"; 
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxPem8Y-rANmN6hc2tyuCd1O1lgUoCVwYHn4mV8K1-QwhVkWSCzjf_k7WQkCh8_gcEnMw/s"; 
 
 let currentProjectID = null; 
 let allProjects = [];
@@ -714,3 +714,4 @@ document.getElementById('deleteProjectBtn').addEventListener('click', () => {
 
 
 document.addEventListener('DOMContentLoaded', loadProjects);
+
