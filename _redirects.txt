@@ -1,4 +1,4 @@
-/api/*https://script.google.com/macros/s/AKfycbzwxLHSpJ9xQTKfc2wUQaIFzuUeWCxHqAXwueaf4jFXPdAYTTYPvQ_dJHzbZ9-MOkxQ/exec 200```eof
+/api/* https://script.google.com/macros/s/AKfycbzwxLHSpJ9xQTKfc2wUQaIFzuUeWCxHqAXwueaf4jFXPdAYTTYPvQ_dJHzbZ9-MOkxQ/exec 200```eof
 
 **Explanation:**
 * `/api/*`: Any request from your dashboard that starts with `/api/` (which we will use in Step 2)
@@ -9,3 +9,4 @@
 
 
 Once you have created and saved the `_redirects` file in your project's root folder, let me know. We will then update your `script.js`.
+
