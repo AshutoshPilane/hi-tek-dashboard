@@ -133,46 +133,6 @@ function postDataToSheet(payload, isGet = false) {
         form.submit();
     });
 }
-// ==============================================================================
-// 3. CORE LOGIC FUNCTIONS
-// ==============================================================================
-// ... (The rest of your script.js code continues here)
-async function postDataToSheet(payload) {
-    if (SHEET_API_URL === "YOUR_APPS_SCRIPT_WEB_APP_URL_GOES_HERE") {
-        alert("CRITICAL ERROR: Please replace 'YOUR_APPS_SCRIPT_WEB_APP_URL_GOES_HERE' in script.js with your published Apps Script URL.");
-        return { status: 'error', message: 'API URL not set.' };
-    }
-    try {
-        const response = await fetch(SHEET_API_URL, {
-            method: 'POST',
-            mode: 'cors',
-            cache: 'no-cache',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const result = await response.json();
-        
-        if (result.status !== 'success') {
-            console.error('API Post Error:', result.message);
-            throw new Error(result.message || 'Server reported an error.');
-        }
-
-        return result;
-
-    } catch (error) {
-        console.error(`Post failed for action ${payload.action}:`, error);
-        alert(`Failed to save data. Please check the console for details.`);
-        return { status: 'error', message: error.message };
-    }
-}
-
 
 // ==============================================================================
 // 3. CORE LOGIC FUNCTIONS
@@ -717,6 +677,7 @@ document.getElementById('deleteProjectBtn').addEventListener('click', () => {
 
 
 document.addEventListener('DOMContentLoaded', loadProjects);
+
 
 
 
