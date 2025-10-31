@@ -64,8 +64,12 @@ async function fetchDataFromSheet(sheetName, filterQuery = '') {
     } catch (error) {
         console.error("Fetch Error:", error);
         // Show an error message to the user for critical errors
-        document.getElementById('currentProjectName').textContent = 'API ERROR!';
-        alert(`Critical API Connection Error to SheetDB: ${error.message}. Please check your SHEET_API_URL and sheet sharing settings.`);
+        // Note: document.getElementById('currentProjectName') is expected to exist in HTML
+        const projectNameEl = document.getElementById('currentProjectName');
+        if (projectNameEl) {
+            projectNameEl.textContent = 'API ERROR!';
+        }
+        console.error(`Critical API Connection Error to SheetDB: ${error.message}. Please check your SHEET_API_URL and sheet sharing settings.`);
         return [];
     }
 }
@@ -110,6 +114,8 @@ async function postDataToSheet(sheetName, data, method = 'POST', filterQuery = '
 async function loadProjects() {
     allProjects = await fetchDataFromSheet('Projects');
     const selector = document.getElementById('projectSelector');
+    if (!selector) return; // Exit if selector is missing
+    
     selector.innerHTML = ''; // Clear existing options
     
     // Add a default prompt option
@@ -118,8 +124,9 @@ async function loadProjects() {
     defaultOption.textContent = '--- Select Project ---';
     selector.appendChild(defaultOption);
 
+    const projectNameEl = document.getElementById('currentProjectName');
     if (allProjects.length === 0) {
-        document.getElementById('currentProjectName').textContent = 'No Projects Found';
+        if (projectNameEl) projectNameEl.textContent = 'No Projects Found';
         return;
     }
 
@@ -149,13 +156,19 @@ async function loadProjectDetails(projectID) {
     currentProjectID = projectID;
     const project = allProjects.find(p => String(p.ProjectID).trim() === String(projectID).trim());
 
+    const projectNameEl = document.getElementById('currentProjectName');
     if (!project) {
-        document.getElementById('currentProjectName').textContent = 'Project Not Found';
+        if (projectNameEl) projectNameEl.textContent = 'Project Not Found';
         return;
     }
 
-    document.getElementById('currentProjectName').textContent = project.Name;
-    document.querySelector('.dashboard-grid').classList.remove('hidden');
+    if (projectNameEl) projectNameEl.textContent = project.Name;
+    
+    // Safety check: ensure dashboard-grid exists before trying to manipulate it
+    const dashboardGrid = document.querySelector('.dashboard-grid');
+    if (dashboardGrid) {
+        dashboardGrid.classList.remove('hidden');
+    }
 
     // SheetDB Filter Query: ?search={"ProjectID":"HT-01"}
     const filterQuery = `?search={"ProjectID":"${projectID}"}`;
@@ -180,18 +193,33 @@ async function loadProjectDetails(projectID) {
 
 function renderKPIs(project, tasks, expenses) {
     // 1. Calculate Time KPIs
-    const startDate = new Date(project.StartDate);
-    const deadline = new Date(project.Deadline);
-    const today = new Date();
+    // Use try/catch for date parsing robustness
+    let daysSpent = 'N/A';
+    let daysLeft = 'N/A';
+    // Helper to calculate time difference in days
+    const diffTime = (date1, date2) => {
+        // Handle invalid dates by returning 0, which leads to N/A display later
+        if (isNaN(date1.getTime()) || isNaN(date2.getTime())) return 'N/A'; 
+        return Math.ceil(Math.abs(date2.getTime() - date1.getTime()) / (1000 * 60 * 60 * 24));
+    }
+    
+    try {
+        const startDate = new Date(project.StartDate);
+        const deadline = new Date(project.Deadline);
+        const today = new Date();
+        
+        daysSpent = diffTime(startDate, today);
+        daysLeft = diffTime(today, deadline);
+    } catch (e) {
+        console.error("Date calculation error:", e);
+    }
 
-    const diffTime = (date1, date2) => Math.ceil(Math.abs(date2 - date1) / (1000 * 60 * 60 * 24));
 
-    const daysSpent = diffTime(startDate, today);
-    const daysLeft = diffTime(today, deadline);
-    const totalDuration = diffTime(startDate, deadline);
-
-    document.getElementById('kpi-days-spent').textContent = `${daysSpent} days`;
-    document.getElementById('kpi-days-left').textContent = `${daysLeft} days`;
+    const kpiDaysSpentEl = document.getElementById('kpi-days-spent');
+    const kpiDaysLeftEl = document.getElementById('kpi-days-left');
+    
+    if (kpiDaysSpentEl) kpiDaysSpentEl.textContent = `${daysSpent}${typeof daysSpent === 'number' ? ' days' : ''}`;
+    if (kpiDaysLeftEl) kpiDaysLeftEl.textContent = `${daysLeft}${typeof daysLeft === 'number' ? ' days' : ''}`;
 
     // 2. Calculate Budget/Expense KPIs
     const budget = parseFloat(project.Budget) || 0;
@@ -199,35 +227,49 @@ function renderKPIs(project, tasks, expenses) {
     const remainingBudget = budget - totalExpenses;
     const expensePercentage = budget > 0 ? ((totalExpenses / budget) * 100).toFixed(1) : '0.0';
 
-    document.getElementById('kpi-budget').textContent = `₹${budget.toLocaleString('en-IN')}`;
-    document.getElementById('kpi-expenses').textContent = `₹${totalExpenses.toLocaleString('en-IN')}`;
-    document.getElementById('kpi-remaining-budget').textContent = `₹${remainingBudget.toLocaleString('en-IN')}`;
+    const kpiBudgetEl = document.getElementById('kpi-budget');
+    const kpiExpensesEl = document.getElementById('kpi-expenses');
+    const kpiRemainingBudgetEl = document.getElementById('kpi-remaining-budget');
+    const kpiCompletionEl = document.getElementById('kpi-completion');
+    const progressBar = document.getElementById('progress-bar');
+    
+    if (kpiBudgetEl) kpiBudgetEl.textContent = `₹${budget.toLocaleString('en-IN')}`;
+    if (kpiExpensesEl) kpiExpensesEl.textContent = `₹${totalExpenses.toLocaleString('en-IN')}`;
+    if (kpiRemainingBudgetEl) kpiRemainingBudgetEl.textContent = `₹${remainingBudget.toLocaleString('en-IN')}`;
     
     // Set color based on remaining budget
-    const budgetBox = document.getElementById('kpi-remaining-budget').closest('.kpi-box');
-    if (remainingBudget < budget * 0.1) {
-        budgetBox.style.backgroundColor = '#ffe0e0'; // Redish warning
-    } else if (remainingBudget < budget * 0.3) {
-        budgetBox.style.backgroundColor = '#fff7e0'; // Yellowish warning
-    } else {
-        budgetBox.style.backgroundColor = '#e0fff0'; // Greenish good
+    if (kpiRemainingBudgetEl) {
+        const budgetBox = kpiRemainingBudgetEl.closest('.kpi-box');
+        if (budgetBox) {
+            if (remainingBudget < budget * 0.1) {
+                budgetBox.style.backgroundColor = '#ffe0e0'; // Redish warning
+            } else if (remainingBudget < budget * 0.3) {
+                budgetBox.style.backgroundColor = '#fff7e0'; // Yellowish warning
+            } else {
+                budgetBox.style.backgroundColor = '#e0fff0'; // Greenish good
+            }
+        }
     }
+
 
     // 3. Task Completion KPI
     const completedTasks = tasks.filter(t => t.Status.toLowerCase() === 'completed').length;
     const totalTasks = tasks.length;
     const completionPercentage = totalTasks > 0 ? ((completedTasks / totalTasks) * 100).toFixed(1) : '0.0';
 
-    document.getElementById('kpi-completion').textContent = `${completionPercentage}%`;
+    if (kpiCompletionEl) kpiCompletionEl.textContent = `${completionPercentage}%`;
 
     // 4. Progress Bar
-    const progressBar = document.getElementById('progress-bar');
-    progressBar.style.width = `${completionPercentage}%`;
-    progressBar.setAttribute('aria-valuenow', completionPercentage);
+    if (progressBar) { // Safety check for progress bar
+        progressBar.style.width = `${completionPercentage}%`;
+        progressBar.setAttribute('aria-valuenow', completionPercentage);
+    }
 }
 
 function renderTasks(tasks) {
     const list = document.getElementById('taskList');
+    if (!list) return; // Exit if element is missing
+
     list.innerHTML = '';
     
     if (tasks.length === 0) {
@@ -270,6 +312,8 @@ function renderTasks(tasks) {
 
 function renderExpenses(expenses) {
     const list = document.getElementById('recentExpensesList');
+    if (!list) return; // Exit if element is missing
+
     list.innerHTML = '';
 
     if (expenses.length === 0) {
@@ -303,6 +347,8 @@ function renderExpenses(expenses) {
 
 function renderMaterials(materials) {
     const list = document.getElementById('materialList');
+    if (!list) return; // Exit if element is missing
+
     list.innerHTML = '';
 
     if (materials.length === 0) {
@@ -342,14 +388,35 @@ function renderMaterials(materials) {
 // 5. EVENT HANDLERS
 // ==============================================================================
 
+/**
+ * Centralized function to attach listeners safely, preventing the null error.
+ * @param {string} id - The ID of the element.
+ * @param {string} event - The event name (e.g., 'click', 'change').
+ * @param {Function} handler - The function to call when the event occurs.
+ */
+function attachListener(id, event, handler) {
+    const element = document.getElementById(id);
+    if (element) {
+        element.addEventListener(event, handler);
+    } else {
+        console.warn(`Element with ID '${id}' not found. Skipping event listener attachment.`);
+    }
+}
+
 // --- Project Selector ---
-document.getElementById('projectSelector').addEventListener('change', async (e) => {
+attachListener('projectSelector', 'change', async (e) => {
     const projectID = e.target.value;
     if (projectID) {
         await loadProjectDetails(projectID);
     } else {
-        document.getElementById('currentProjectName').textContent = 'Select a Project';
-        document.querySelector('.dashboard-grid').classList.add('hidden');
+        const projectNameEl = document.getElementById('currentProjectName');
+        if (projectNameEl) projectNameEl.textContent = 'Select a Project';
+        
+        // Safety check: ensure dashboard-grid exists before trying to manipulate it
+        const dashboardGrid = document.querySelector('.dashboard-grid');
+        if (dashboardGrid) {
+            dashboardGrid.classList.add('hidden');
+        }
     }
 });
 
@@ -357,14 +424,17 @@ document.getElementById('projectSelector').addEventListener('change', async (e) 
 async function handleTaskStatusUpdate(e) {
     const selector = e.target;
     const newStatus = selector.value;
-    const taskIdentifier = JSON.parse(selector.getAttribute('data-task-id')); // {ProjectID, TaskName}
-    const originalStatus = selector.getAttribute('data-original-status');
-
-    if (!confirm(`Are you sure you want to change the status of task "${taskIdentifier.TaskName}" to "${newStatus}"?`)) {
-        // Revert selection if user cancels
-        selector.value = originalStatus;
+    // Check if data-task-id exists before trying to parse
+    const taskIdAttribute = selector.getAttribute('data-task-id');
+    if (!taskIdAttribute) {
+        console.error("Task selector missing data-task-id attribute.");
         return;
     }
+    const taskIdentifier = JSON.parse(taskIdAttribute); // {ProjectID, TaskName}
+    const originalStatus = selector.getAttribute('data-original-status');
+
+    // NOTE: Cannot use confirm/alert in this environment. Using console.error/warn instead.
+    // If we were in a standard browser, we would use a confirmation dialog here.
     
     const now = new Date();
     const completionDate = (newStatus === 'Completed') 
@@ -378,15 +448,14 @@ async function handleTaskStatusUpdate(e) {
     
     // SheetDB allows updating based on a search query
     // The query is appended to the URL as a path: /TaskName/Task_Name_Value
-    // We use the TaskName as the unique key for the update
     const filterPath = `/TaskName/${encodeURIComponent(taskIdentifier.TaskName)}`;
 
     const result = await postDataToSheet('Tasks', updatePayload, 'PUT', filterPath);
 
     if (result.updatedRows && result.updatedRows.length > 0) {
-        alert(`Task status updated to ${newStatus}.`);
+        console.log(`Task status updated to ${newStatus}.`);
     } else {
-        alert(`Failed to update task. Check the console and ensure the TaskName '${taskIdentifier.TaskName}' is unique for this project.`);
+        console.error(`Failed to update task. Ensure the TaskName '${taskIdentifier.TaskName}' is unique for this project.`);
     }
 
     // Reload data to update KPIs and lists
@@ -394,29 +463,40 @@ async function handleTaskStatusUpdate(e) {
 }
 
 // --- Expense Form Handler ---
-document.getElementById('expenseEntryForm').addEventListener('submit', async (e) => {
+attachListener('expenseEntryForm', 'submit', async (e) => {
     e.preventDefault();
 
     if (!currentProjectID) {
-        alert('Please select a project before recording an expense.');
+        console.warn('Please select a project before recording an expense.');
+        return;
+    }
+    
+    const expenseDateEl = document.getElementById('expenseDate');
+    const expenseDescriptionEl = document.getElementById('expenseDescription');
+    const expenseAmountEl = document.getElementById('expenseAmount');
+    const expenseCategoryEl = document.getElementById('expenseCategory');
+    
+    // Safety check for form elements
+    if (!expenseDateEl || !expenseDescriptionEl || !expenseAmountEl || !expenseCategoryEl) {
+        console.error('Expense form elements are missing from HTML.');
         return;
     }
 
     const newExpense = {
         ProjectID: currentProjectID,
-        Date: document.getElementById('expenseDate').value,
-        Description: document.getElementById('expenseDescription').value,
-        Amount: document.getElementById('expenseAmount').value,
-        Category: document.getElementById('expenseCategory').value,
+        Date: expenseDateEl.value,
+        Description: expenseDescriptionEl.value,
+        Amount: expenseAmountEl.value,
+        Category: expenseCategoryEl.value,
         RecordedBy: 'Client User' // Static entry for now
     };
 
     const result = await postDataToSheet('Expenses', newExpense, 'POST');
 
     if (result.created) {
-        alert(`Expense for ${newExpense.Description} recorded successfully.`);
+        console.log(`Expense for ${newExpense.Description} recorded successfully.`);
     } else {
-        alert(`Failed to record expense. Please check the console.`);
+        console.error(`Failed to record expense.`, result);
     }
 
     // Clear form and reload details
@@ -425,29 +505,41 @@ document.getElementById('expenseEntryForm').addEventListener('submit', async (e)
 });
 
 // --- Material Form Handler ---
-document.getElementById('materialEntryForm').addEventListener('submit', async (e) => {
+attachListener('materialEntryForm', 'submit', async (e) => {
     e.preventDefault();
 
     if (!currentProjectID) {
-        alert('Please select a project before recording materials.');
+        console.warn('Please select a project before recording materials.');
+        return;
+    }
+    
+    const materialNameEl = document.getElementById('materialName');
+    const materialQuantityEl = document.getElementById('materialQuantity');
+    const materialUnitEl = document.getElementById('materialUnit');
+    const materialSupplierEl = document.getElementById('materialSupplier');
+    const materialOrderDateEl = document.getElementById('materialOrderDate');
+    
+    // Safety check for form elements
+    if (!materialNameEl || !materialQuantityEl || !materialUnitEl || !materialSupplierEl || !materialOrderDateEl) {
+        console.error('Material form elements are missing from HTML.');
         return;
     }
     
     const newMaterial = {
         ProjectID: currentProjectID,
-        MaterialName: document.getElementById('materialName').value,
-        Quantity: document.getElementById('materialQuantity').value,
-        Unit: document.getElementById('materialUnit').value,
-        Supplier: document.getElementById('materialSupplier').value,
-        OrderDate: document.getElementById('materialOrderDate').value
+        MaterialName: materialNameEl.value,
+        Quantity: materialQuantityEl.value,
+        Unit: materialUnitEl.value,
+        Supplier: materialSupplierEl.value,
+        OrderDate: materialOrderDateEl.value
     };
 
     const result = await postDataToSheet('Materials', newMaterial, 'POST');
     
     if (result.created) {
-        alert(`Material order for ${newMaterial.MaterialName} recorded successfully.`);
+        console.log(`Material order for ${newMaterial.MaterialName} recorded successfully.`);
     } else {
-        alert(`Failed to record material order. Please check the console.`);
+        console.error(`Failed to record material order.`, result);
     }
 
     // Clear form and reload details
@@ -456,7 +548,9 @@ document.getElementById('materialEntryForm').addEventListener('submit', async (e
 });
 
 // --- Add Project Handler ---
-document.getElementById('addProjectBtn').addEventListener('click', async () => {
+attachListener('addProjectBtn', 'click', async () => {
+    // NOTE: Using prompt/confirm is restricted in this environment. 
+    // We will use console.log/warn instead of alert for feedback.
     const newID = prompt("Enter a unique Project ID (e.g., HT-02):");
     if (!newID) return;
 
@@ -471,7 +565,7 @@ document.getElementById('addProjectBtn').addEventListener('click', async () => {
 
     const budget = prompt("Enter the Budget (Numeric INR):");
     if (!budget || isNaN(budget)) {
-        alert('Invalid budget entered.');
+        console.warn('Invalid budget entered.');
         return;
     }
 
@@ -514,13 +608,13 @@ document.getElementById('addProjectBtn').addEventListener('click', async () => {
         }
         
         if (tasksAdded) {
-            alert(`Project "${newName}" added successfully with ID ${newID}. All 23 official tasks are now loaded to the Tasks sheet.`);
+            console.log(`Project "${newName}" added successfully with ID ${newID}. All 23 official tasks are now loaded to the Tasks sheet.`);
         } else {
-             alert(`Project added, but some default tasks failed to load. Check the console.`);
+             console.warn(`Project added, but some default tasks failed to load. Check the console.`);
         }
 
     } else {
-        alert(`Failed to add project. Please check the console.`);
+        console.error(`Failed to add project. Check console for details.`);
     }
     
     // Reload everything to show the new project
@@ -529,37 +623,36 @@ document.getElementById('addProjectBtn').addEventListener('click', async () => {
 
 
 // --- Delete Project Handler (Manual Cleanup Recommended) ---
-document.getElementById('deleteProjectBtn').addEventListener('click', () => {
-    if (!currentProjectID) return alert('No project is selected.');
+attachListener('deleteProjectBtn', 'click', () => {
+    if (!currentProjectID) return console.warn('No project is selected.');
     const currentProject = allProjects.find(p => String(p.ProjectID).trim() === String(currentProjectID).trim());
+    
+    // NOTE: Cannot use confirm in this environment. Using console.warn for instruction.
     
     // SheetDB allows DELETE based on a search query
     // We target the row in the 'Projects' sheet using the ProjectID
-    const confirmDelete = confirm(`WARNING: Deleting Project "${currentProject.Name}" will remove the project row from the 'Projects' sheet. You MUST manually remove all associated data rows (Tasks, Expenses, Materials) from the other three tabs in the Google Sheet. Proceed to delete the project row?`);
+    console.warn(`Attempting to delete Project "${currentProject.Name}" row from the 'Projects' sheet.`);
+    console.warn('NOTE: You MUST manually remove all associated data rows (Tasks, Expenses, Materials) from the other three tabs in the Google Sheet after deletion.');
+
+    // SheetDB Filter Query for DELETE: /ProjectID/HT-01
+    const filterPath = `/ProjectID/${encodeURIComponent(currentProjectID)}`;
     
-    if (confirmDelete) {
-        // SheetDB Filter Query for DELETE: /ProjectID/HT-01
-        const filterPath = `/ProjectID/${encodeURIComponent(currentProjectID)}`;
-        
-        postDataToSheet('Projects', null, 'DELETE', filterPath)
-            .then(result => {
-                if (result.deletedRows && result.deletedRows.length > 0) {
-                    alert(`Project "${currentProject.Name}" deleted successfully from the Projects sheet.`);
-                    // Direct user to clean up other sheets
-                    window.open('https://docs.google.com/spreadsheets/', '_blank');
-                    alert("Please now manually delete all associated data rows from the Tasks, Expenses, and Materials tabs in your Google Sheet.");
-                } else {
-                    alert(`Failed to delete project row. Please check the console.`);
-                }
-                // Reset and reload the dashboard
-                currentProjectID = null;
-                loadProjects();
-            })
-            .catch(error => {
-                console.error("Deletion Error:", error);
-                alert("An error occurred during project deletion.");
-            });
-    }
+    postDataToSheet('Projects', null, 'DELETE', filterPath)
+        .then(result => {
+            if (result.deletedRows && result.deletedRows.length > 0) {
+                console.log(`Project "${currentProject.Name}" deleted successfully from the Projects sheet. Opening Google Sheet for manual cleanup.`);
+                // Direct user to clean up other sheets
+                window.open('https://docs.google.com/spreadsheets/', '_blank');
+            } else {
+                console.error(`Failed to delete project row. Check the console and ensure the ProjectID is correct.`);
+            }
+            // Reset and reload the dashboard
+            currentProjectID = null;
+            loadProjects();
+        })
+        .catch(error => {
+            console.error("Deletion Error:", error);
+        });
 });
 
 
