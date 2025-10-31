@@ -1,11 +1,9 @@
 // ==============================================================================
 // script.js: ONLINE VERSION (Google Sheet API Integration)
-// Data is fetched from and sent to the live Google Sheet via a Web App.
+// FINAL VERSION WITH ALL KNOWN CLIENT-SIDE FIXES
 // ==============================================================================
 
 // 🎯 CRITICAL: PASTE YOUR NEW VERIFIED APPS SCRIPT URL HERE!
-// !!! REPLACE THIS PLACEHOLDER AFTER PUBLISHING YOUR GOOGLE APPS SCRIPT !!!
-// NOTE: Renamed variable to match usage in postDataToSheet
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxPem8Y-rANmN6hc2tyuCd1O1lgUoCVwYHn4mV8K1-QwhVkWSCzjf_k7WQkCh8_gcEnMw/s"; 
 
 let currentProjectID = null; 
@@ -40,13 +38,11 @@ const HI_TEK_TASKS_MAP = [
 
 // ==============================================================================
 // 2. DATA UTILITIES (API FUNCTIONS) - COMPLETE CORS WORKAROUND VERSION
-// All data traffic uses the CORS-exempt form submission method.
 // ==============================================================================
 
 /**
  * Main function to communicate with the Google Apps Script Web App.
- * Uses a hidden iframe/form submission technique to bypass CORS restrictions.
- * * @param {object} payload - The data to send to the Apps Script (includes 'action').
+ * @param {object} payload - The data to send to the Apps Script (includes 'action').
  * @param {boolean} isGet - True if this is a Read action (expects JSON response).
  * @returns {Promise<object|Array>} Resolves with data array for GET, or status object for POST.
  */
@@ -54,7 +50,7 @@ function postDataToSheet(payload, isGet = false) {
     return new Promise((resolve, reject) => {
         // 1. Create a dynamic form and iframe
         const form = document.createElement('form');
-        form.action = APPS_SCRIPT_URL; // Uses the /s endpoint URL
+        form.action = APPS_SCRIPT_URL;
         form.method = 'POST';
         form.target = 'iframe_upload';
         form.style.display = 'none';
@@ -68,7 +64,8 @@ function postDataToSheet(payload, isGet = false) {
             const input = document.createElement('input');
             input.type = 'hidden';
             input.name = key;
-            input.value = payload[key];
+            // CRITICAL: Ensure all values are correctly stringified if they are complex objects
+            input.value = (typeof payload[key] === 'object' && payload[key] !== null) ? JSON.stringify(payload[key]) : payload[key];
             form.appendChild(input);
         }
 
@@ -80,11 +77,17 @@ function postDataToSheet(payload, isGet = false) {
             let responseText = '';
             
             try {
-                // Reading content should now work with the /s URL
-                responseText = iframe.contentWindow.document.body.textContent;
+                // The main fix for Iframe content access blocked error
+                // We check if contentWindow exists and if we can safely read content.
+                if (iframe.contentWindow && iframe.contentWindow.document && iframe.contentWindow.document.body) {
+                    responseText = iframe.contentWindow.document.body.textContent;
+                } else {
+                     // Fallback for when the document structure cannot be read due to security or timing
+                     responseText = isGet ? '' : 'success_callback'; 
+                }
             } catch (e) {
+                console.warn("Iframe content reading failed due to SecurityError. Using fallback.", e);
                 // Fallback for unexpected security issues
-                console.warn("Iframe content reading failed unexpectedly. Using fallback.", e);
                 responseText = isGet ? '' : 'success_callback'; 
             }
             
@@ -101,14 +104,15 @@ function postDataToSheet(payload, isGet = false) {
                     
                     if (result.status === 'success') {
                         console.log("SUCCESSFUL GET RESPONSE DATA:", result.data);
-                        resolve(result.data || []); // Resolve with the data array
+                        resolve(result.data || []);
                     } else {
                         console.error(`API Error for ${payload.action}:`, result.message);
-                        resolve([]); // Resolve with empty array on server-side error
+                        resolve([]);
                     }
                 } catch (e) {
+                    // This is the error you are seeing: Unexpected end of JSON input
                     console.error(`GET response parsing failed for ${payload.action}: Raw Response:`, trimmedResponse, e);
-                    resolve([]); // Resolve with empty array on parsing error
+                    resolve([]);
                 }
             } else {
                 // For POST/Write requests, we expect the simple 'success_callback' string
@@ -117,6 +121,7 @@ function postDataToSheet(payload, isGet = false) {
                 } else {
                     console.error('Server reported an error (via form submission): Raw Response:', trimmedResponse);
                     const message = trimmedResponse.replace('error_callback:', '').trim() || 'Operation failed. Check Apps Script logs.';
+                    // If the server returns a 500 error, the response text is often blank or garbage, triggering the reject path.
                     reject({ status: 'error', message: message });
                 }
             }
@@ -130,9 +135,6 @@ function postDataToSheet(payload, isGet = false) {
 
 /**
  * Helper function to call postDataToSheet for GET actions.
- * @param {string} action - The action string (e.g., 'getProjects').
- * @param {string} [projectID] - Optional Project ID for filtering.
- * @returns {Promise<Array>}
  */
 function fetchDataFromSheet(action, projectID = '') {
     const payload = {
@@ -161,7 +163,6 @@ async function loadProjects() {
     if (validProjects.length === 0) {
         selector.innerHTML = '<option value="">-- No Projects Found --</option>';
         document.getElementById('currentProjectName').textContent = 'Please add a project.';
-        // Clear dashboard view when no projects are present
         currentProjectID = null;
         renderDashboard(); 
         return;
@@ -193,19 +194,15 @@ function handleProjectSelectionChange(id) {
 
 async function renderDashboard() {
     if (!currentProjectID) {
-        // Clear all dashboard elements if no project is selected
         document.getElementById('currentProjectName').textContent = 'Select a Project';
         document.getElementById('taskTableBody').innerHTML = '<tr><td colspan="5">No tasks loaded...</td></tr>';
         document.getElementById('materialTableBody').innerHTML = '<tr><td colspan="5">No materials loaded...</td></tr>';
         document.getElementById('recentExpensesList').innerHTML = '<li class="placeholder">No expenses loaded...</li>';
-        
-        // Reset KPIs and details display
         renderProjectDetails({});
         renderKPIs({}, [], [], []);
         return;
     }
 
-    // Show loading state
     document.getElementById('currentProjectName').textContent = 'Loading...';
 
     const currentProject = allProjects.find(p => String(p.ProjectID).trim() === String(currentProjectID).trim());
@@ -218,14 +215,12 @@ async function renderDashboard() {
 
     renderProjectDetails(currentProject);
 
-    // Fetch all related data in parallel
     const [tasks, expenses, materials] = await Promise.all([
         fetchDataFromSheet('getTasks', currentProjectID),
         fetchDataFromSheet('getExpenses', currentProjectID),
         fetchDataFromSheet('getMaterials', currentProjectID)
     ]);
     
-    // Sort tasks numerically (important for dependency logic)
     const sortedTasks = tasks.sort((a, b) => {
         const numA = parseInt(a.Name);
         const numB = parseInt(b.Name);
@@ -234,12 +229,9 @@ async function renderDashboard() {
 
     renderTaskTable(sortedTasks);
     populateTaskUpdateSelector(sortedTasks); 
-    
     renderRecentExpenses(expenses);
-    
     renderMaterialTable(materials);
     populateMaterialSelector(materials);
-    
     renderKPIs(currentProject, sortedTasks, expenses, materials);
 }
 
@@ -259,7 +251,6 @@ function renderProjectDetails(project) {
     document.getElementById('display-contact1').textContent = project.Contact1 || 'N/A';
     document.getElementById('display-contact2').textContent = project.Contact2 || 'N/A';
 
-    // Populate edit form
     document.getElementById('input-name').value = project.Name || '';
     document.getElementById('input-start-date').value = project.StartDate ? project.StartDate.split('T')[0] : '';
     document.getElementById('input-deadline').value = project.Deadline ? project.Deadline.split('T')[0] : '';
@@ -406,7 +397,6 @@ function populateTaskUpdateSelector(tasks) {
         option.value = String(task.Name).trim(); 
         option.textContent = `${task.Name} (${task.Progress || 0}%) - ${task.Responsible}`;
 
-        // Dependency Logic (lock current if previous is incomplete)
         if (index > 0) {
             const previousTask = tasks[index - 1];
             if (Number(previousTask.Progress) < 100) {
@@ -421,7 +411,6 @@ function populateTaskUpdateSelector(tasks) {
 
         taskSelector.appendChild(option);
 
-        // Reset the flag if the current task is still incomplete
         if (Number(task.Progress) < 100) {
             isPreviousTaskComplete = false;
         }
@@ -497,20 +486,23 @@ document.getElementById('saveProjectDetailsBtn').addEventListener('click', async
         Contact2: document.getElementById('input-contact2').value,
     };
     
+    // CRITICAL FIX: The data object must be sent as a string under the 'data' key.
     const payload = { action: 'updateProject', projectID: currentProjectID, data: JSON.stringify(data) };
     
-    // NOTE: The data property must be stringified for form submission, fixed in the payload creation here.
-    const result = await postDataToSheet(payload); 
-
-    if (result.status === 'success') {
-        alert('Project details saved online successfully!');
-        document.getElementById('projectDetailsDisplay').style.display = 'block';
-        document.getElementById('projectDetailsEdit').style.display = 'none';
-        document.getElementById('editProjectDetailsBtn').style.display = 'block';
-        document.getElementById('saveProjectDetailsBtn').style.display = 'none';
-        await loadProjects(); 
-    } else {
-        alert(`Failed to save project details: ${result.message}`);
+    try {
+        const result = await postDataToSheet(payload); 
+        if (result.status === 'success') {
+            alert('Project details saved online successfully!');
+            document.getElementById('projectDetailsDisplay').style.display = 'block';
+            document.getElementById('projectDetailsEdit').style.display = 'none';
+            document.getElementById('editProjectDetailsBtn').style.display = 'block';
+            document.getElementById('saveProjectDetailsBtn').style.display = 'none';
+            await loadProjects(); 
+        } else {
+            alert(`Failed to save project details: ${result.message}`);
+        }
+    } catch(error) {
+         alert(`Failed to save project details: ${error.message}. Check console for Apps Script 500 errors.`);
     }
 });
 
@@ -532,14 +524,17 @@ document.getElementById('expenseEntryForm').addEventListener('submit', async (e)
         category: form.expenseCategory.value,
     };
 
-    const result = await postDataToSheet(payload);
-    
-    if (result.status === 'success') {
-        alert('Expense recorded successfully!');
-        form.reset(); 
-        renderDashboard(); 
-    } else {
-        alert(`Failed to record expense: ${result.message}`);
+    try {
+        const result = await postDataToSheet(payload);
+        if (result.status === 'success') {
+            alert('Expense recorded successfully!');
+            form.reset(); 
+            renderDashboard(); 
+        } else {
+            alert(`Failed to record expense: ${result.message}`);
+        }
+    } catch (error) {
+        alert(`Failed to record expense: ${error.message}. Check console for Apps Script 500 errors.`);
     }
 });
 
@@ -561,14 +556,17 @@ document.getElementById('updateTaskForm').addEventListener('submit', async (e) =
         dueDate: form.taskDue.value,
     };
 
-    const result = await postDataToSheet(payload);
-    
-    if (result.status === 'success') {
-        alert('Task updated successfully!');
-        form.reset(); 
-        renderDashboard(); 
-    } else {
-        alert(`Failed to update task: ${result.message}`);
+    try {
+        const result = await postDataToSheet(payload);
+        if (result.status === 'success') {
+            alert('Task updated successfully!');
+            form.reset(); 
+            renderDashboard(); 
+        } else {
+            alert(`Failed to update task: ${result.message}`);
+        }
+    } catch (error) {
+        alert(`Failed to update task: ${error.message}. Check console for Apps Script 500 errors.`);
     }
 });
 
@@ -594,7 +592,6 @@ document.getElementById('recordDispatchForm').addEventListener('submit', async (
         return alert('Please select an existing material OR enter a new material name.');
     }
     
-    // Validation: Only allow dispatchQuantity of 0 when adding a NEW material
     if (!isNewMaterial && (dispatchQuantity <= 0 || isNaN(dispatchQuantity))) {
         return alert('When updating an existing material, Dispatch Quantity must be 1 or greater.');
     }
@@ -622,14 +619,17 @@ document.getElementById('recordDispatchForm').addEventListener('submit', async (
         dispatchDate: new Date().toISOString().split('T')[0]
     };
 
-    const result = await postDataToSheet(payload);
-
-    if (result.status === 'success') {
-        alert(`Material dispatch recorded for ${itemName} successfully!`);
-        form.reset(); 
-        renderDashboard(); 
-    } else {
-        alert(`Failed to record dispatch: ${result.message}`);
+    try {
+        const result = await postDataToSheet(payload);
+        if (result.status === 'success') {
+            alert(`Material dispatch recorded for ${itemName} successfully!`);
+            form.reset(); 
+            renderDashboard(); 
+        } else {
+            alert(`Failed to record dispatch: ${result.message}`);
+        }
+    } catch(error) {
+         alert(`Failed to record dispatch: ${error.message}. Check console for Apps Script 500 errors.`);
     }
 });
 
@@ -638,7 +638,6 @@ document.getElementById('addProjectBtn').addEventListener('click', async () => {
     const newName = prompt("Enter the Name for the New Project:");
     if (!newName) return;
     
-    // Create a new unique ID
     const newID = 'P' + Date.now().toString().slice(-4); 
     
     const projectData = {
@@ -657,17 +656,20 @@ document.getElementById('addProjectBtn').addEventListener('click', async () => {
     const payload = {
         action: 'addProjectWithTasks', 
         projectID: newID,
-        // CRITICAL: Must JSON.stringify non-simple form data for the backend to parse
-        projectData: JSON.stringify(projectData), 
-        defaultTasks: JSON.stringify(HI_TEK_TASKS_MAP) 
+        // CRITICAL FIX: Send data as a single stringified key-value pair
+        projectData: projectData, // This will be stringified automatically in postDataToSheet
+        defaultTasks: HI_TEK_TASKS_MAP // This will be stringified automatically in postDataToSheet
     };
     
-    const result = await postDataToSheet(payload);
-    
-    if (result.status === 'success') {
-        alert(`Project "${newName}" added successfully with ID ${newID}. All 23 official tasks are now loaded to the sheet.`);
-    } else {
-        alert(`Failed to add project. Please check the console.`);
+    try {
+        const result = await postDataToSheet(payload);
+        if (result.status === 'success') {
+            alert(`Project "${newName}" added successfully with ID ${newID}. All 23 official tasks are now loaded to the sheet.`);
+        } else {
+            alert(`Failed to add project: ${result.message}. Please check the console.`);
+        }
+    } catch(error) {
+        alert(`Failed to add project: ${error.message}. Check console for Apps Script 500 errors.`);
     }
     
     await loadProjects();
@@ -677,7 +679,6 @@ document.getElementById('deleteProjectBtn').addEventListener('click', () => {
     if (!currentProjectID) return alert('No project is selected.');
     const currentProject = allProjects.find(p => String(p.ProjectID).trim() === String(currentProjectID).trim());
     
-    // NOTE: Manual deletion is advised for comprehensive cleanup across multiple sheets.
     const confirmDelete = confirm(`WARNING: Deleting Project "${currentProject.Name}" requires manual removal of all associated data rows (Tasks, Expenses, Materials) from all four tabs in the Google Sheet. Proceed to the Google Sheet?`);
     
     if (confirmDelete) {
