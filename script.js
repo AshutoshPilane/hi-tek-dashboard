@@ -122,9 +122,13 @@ iframe.onload = () => {
     if (isGet) {
          // For GET/Read requests, we expect a JSON string response from the backend
         try {
+            // Inside script.js, inside postDataToSheet, within the 'if (isGet)' block:
+// ...
             const result = JSON.parse(trimmedResponse);
             if (result.status === 'success') {
+                console.log("SUCCESSFUL GET RESPONSE DATA:", result.data); // <--- ADD THIS LINE
                 resolve(result.data || []);
+// ...
             } else {
                 console.error(`API Error for ${payload.action}:`, result.message);
                 resolve([]); // Return empty array on error
@@ -693,6 +697,7 @@ document.getElementById('deleteProjectBtn').addEventListener('click', () => {
 
 
 document.addEventListener('DOMContentLoaded', loadProjects);
+
 
 
 
