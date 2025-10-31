@@ -4,7 +4,8 @@
 // ==============================================================================
 
 // 🎯 CRITICAL: PASTE YOUR NEW VERIFIED APPS SCRIPT URL HERE!
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxPem8Y-rANmN6hc2tyuCd1O1lgUoCVwYHn4mV8K1-QwhVkWSCzjf_k7WQkCh8_gcEnMw/s"; 
+// MUST be the URL from the 'Web app' deployment that has 'Anyone' access.
+const APPS_SCRIPT_URL = "YOUR_NEW_APPS_SCRIPT_WEB_APP_URL_HERE"; 
 
 let currentProjectID = null; 
 let allProjects = [];
@@ -72,26 +73,30 @@ function postDataToSheet(payload, isGet = false) {
         document.body.appendChild(iframe);
         document.body.appendChild(form);
 
+        let timeoutId = setTimeout(() => {
+            console.error("API Timeout: No response received from Apps Script.");
+            form.remove();
+            iframe.remove();
+            reject({ status: 'error', message: 'API request timed out (possible 500 error or blocking).' });
+        }, 15000); // 15 second timeout
+
         // 3. Handle response using iframe.onload
         iframe.onload = () => {
+            clearTimeout(timeoutId);
             let responseText = '';
             
+            // FINAL FIX: Use try/catch to handle SecurityError gracefully and use a fallback.
             try {
-                // The main fix for Iframe content access blocked error
-                // We check if contentWindow exists and if we can safely read content.
+                // Attempt to read content, knowing it might fail due to SecurityError
                 if (iframe.contentWindow && iframe.contentWindow.document && iframe.contentWindow.document.body) {
                     responseText = iframe.contentWindow.document.body.textContent;
-                } else {
-                     // Fallback for when the document structure cannot be read due to security or timing
-                     responseText = isGet ? '' : 'success_callback'; 
                 }
             } catch (e) {
-                console.warn("Iframe content reading failed due to SecurityError. Using fallback.", e);
-                // Fallback for unexpected security issues
-                responseText = isGet ? '' : 'success_callback'; 
+                console.warn("Iframe content reading blocked/failed, using fallback response. SecurityError:", e);
+                // When SecurityError occurs, responseText remains '', which is handled below.
             }
             
-            // Cleanup
+            // Cleanup and immediate removal of elements
             form.remove();
             iframe.remove();
 
@@ -103,16 +108,21 @@ function postDataToSheet(payload, isGet = false) {
                     const result = JSON.parse(trimmedResponse);
                     
                     if (result.status === 'success') {
-                        console.log("SUCCESSFUL GET RESPONSE DATA:", result.data);
                         resolve(result.data || []);
                     } else {
                         console.error(`API Error for ${payload.action}:`, result.message);
                         resolve([]);
                     }
                 } catch (e) {
-                    // This is the error you are seeing: Unexpected end of JSON input
+                    // This catches the 'Unexpected end of JSON input' when Apps Script fails (500)
                     console.error(`GET response parsing failed for ${payload.action}: Raw Response:`, trimmedResponse, e);
-                    resolve([]);
+                    // CRITICAL: If the response is blank, it's often a 500 or 403 error. 
+                    // Reject to trigger an alert on the client.
+                    if (trimmedResponse === '') {
+                        reject({ status: 'error', message: 'Server did not return a valid response (Check Apps Script logs for 500/403 errors).' });
+                    } else {
+                        resolve([]);
+                    }
                 }
             } else {
                 // For POST/Write requests, we expect the simple 'success_callback' string
@@ -120,8 +130,8 @@ function postDataToSheet(payload, isGet = false) {
                     resolve({ status: 'success', message: 'Operation successful' });
                 } else {
                     console.error('Server reported an error (via form submission): Raw Response:', trimmedResponse);
+                    // The server either failed (500) or returned an explicit error_callback
                     const message = trimmedResponse.replace('error_callback:', '').trim() || 'Operation failed. Check Apps Script logs.';
-                    // If the server returns a 500 error, the response text is often blank or garbage, triggering the reject path.
                     reject({ status: 'error', message: message });
                 }
             }
@@ -141,13 +151,23 @@ function fetchDataFromSheet(action, projectID = '') {
         action: action,
         projectID: projectID
     };
-    return postDataToSheet(payload, true);
+    return postDataToSheet(payload, true)
+    .catch(error => {
+        alert(`Failed to fetch data for ${action}: ${error.message}`);
+        return []; // Return empty array on fetch failure
+    });
 }
 
+// ... (Rest of the script.js remains the same as the previous version) ...
+// The rest of the functions (loadProjects, renderDashboard, handleProjectSelectionChange, etc.) 
+// should be appended here. Since they were provided in the previous step and only the 
+// postDataToSheet function had the critical security/error handling changes, 
+// you can copy them from the last complete script.js version you had.
+// ...
 
-// ==============================================================================
-// 3. CORE LOGIC FUNCTIONS
-// ==============================================================================
+// ------------------- (REST OF script.js CODE HERE) -------------------
+// (All functions like loadProjects, renderDashboard, and all event listeners should follow)
+// ---------------------------------------------------------------------
 
 async function loadProjects() {
     allProjects = await fetchDataFromSheet('getProjects');
@@ -656,9 +676,9 @@ document.getElementById('addProjectBtn').addEventListener('click', async () => {
     const payload = {
         action: 'addProjectWithTasks', 
         projectID: newID,
-        // CRITICAL FIX: Send data as a single stringified key-value pair
-        projectData: projectData, // This will be stringified automatically in postDataToSheet
-        defaultTasks: HI_TEK_TASKS_MAP // This will be stringified automatically in postDataToSheet
+        // The data is stringified automatically in postDataToSheet
+        projectData: projectData, 
+        defaultTasks: HI_TEK_TASKS_MAP 
     };
     
     try {
