@@ -5,7 +5,7 @@
 
 // 🎯 CRITICAL: PASTE YOUR NEW VERIFIED APPS SCRIPT URL HERE!
 // !!! REPLACE THIS PLACEHOLDER AFTER PUBLISHING YOUR GOOGLE APPS SCRIPT !!!
-const SHEET_API_URL = "https://script.google.com/macros/s/AKfycbwBbxRIV0e8xUC-Ic4IYJjWRFagLQkZ-w0r5C6pwNysxMldeKw9fkQwm9vOJXyihwyqbA/exec"; 
+const SHEET_API_URL = "https://script.google.com/macros/s/AKfycbzxcMcx2Fm7ZW8lWX_1hxYemFP8n35XPbEIswQUm-V2xH4AraXGcdB2TH077BU4aIHVNA/exec"; 
 
 let currentProjectID = null; 
 let allProjects = [];
@@ -23,618 +23,504 @@ const HI_TEK_TASKS_MAP = [
     { Name: '9. Manage Materials', Responsible: 'Procurement Manager/Warehouse Supervisor' },
     { Name: '10. Prepare BOQ for Production', Responsible: 'Production Planner' },
     { Name: '11. Approval from Director', Responsible: 'Director/General Manager' },
-    { Name: '12. Production', Responsible: 'Production Supervisor' },
-    { Name: '13. Post-Production Check', Responsible: 'Quality Inspector' },
-    { Name: '14. Dispatch', Responsible: 'Logistics Manager' },
-    { Name: '15. Installation', Responsible: 'Site Engineer' },
-    { Name: '16. Handover Measurements', Responsible: 'Surveyor' },
-    { Name: '17. Cross-Check Final Work', Responsible: 'Quality Inspector' },
-    { Name: '18. Create Abstract Invoice', Responsible: 'Accounts Manager' },
-    { Name: '19. Approval from Director', Responsible: 'Director' },
-    { Name: '20. Process Invoice', Responsible: 'Accounts Executive' },
-    { Name: '21. Submit Bill On-Site', Responsible: 'Accounts Executive' },
-    { Name: '22. Payment Follow-Up', Responsible: 'Accounts Manager' },
-    { Name: '23. Submit No-Objection Letter', Responsible: 'Project Manager' }
+    { Name: '12. Project Launch', Responsible: 'Project Manager' },
+    { Name: '13. Site Preparation', Responsible: 'Site Engineer' },
+    { Name: '14. Installation Planning', Responsible: 'Installation Manager' },
+    { Name: '15. Material Delivery', Responsible: 'Logistics/Warehouse Supervisor' },
+    { Name: '16. Start Installation', Responsible: 'Installation Team' },
+    { Name: '17. Quality Check 1 (Mid-point)', Responsible: 'Quality Inspector' },
+    { Name: '18. Installation Completion', Responsible: 'Installation Team' },
+    { Name: '19. Final Quality Check', Responsible: 'Quality Inspector' },
+    { Name: '20. Client Handover', Responsible: 'Project Manager' },
+    { Name: '21. Final Documentation', Responsible: 'Project Coordinator/Accounts' },
+    { Name: '22. Invoice Submission', Responsible: 'Accounts Manager' },
+    { Name: '23. Payment Follow-up', Responsible: 'Accounts Manager' }
 ];
 
-// ==============================================================================
-// 2. DATA UTILITIES (API FUNCTIONS)
-// ==============================================================================
+// --- 2. API INTERACTION UTILITIES ---
 
-async function fetchDataFromSheet(action, projectID = '') {
-    if (SHEET_API_URL === "YOUR_APPS_SCRIPT_WEB_APP_URL_GOES_HERE") {
-        alert("CRITICAL ERROR: Please replace 'YOUR_APPS_SCRIPT_WEB_APP_URL_GOES_HERE' in script.js with your published Apps Script URL.");
-        return [];
-    }
-    const url = new URL(SHEET_API_URL);
-    url.searchParams.append('action', action);
-    if (projectID) {
-        url.searchParams.append('projectID', projectID);
-    }
-    
-    try {
-        const response = await fetch(url.toString());
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const result = await response.json();
-        
-        if (result.status === 'success') {
-            // Ensure data is always an array, even if it's empty
-            return result.data || []; 
-        } else {
-            console.error(`API Error for ${action}:`, result.message);
-            return [];
-        }
-    } catch (error) {
-        console.error(`Fetch failed for ${action}:`, error);
-        alert(`Could not connect to the Google Sheet. Details in console.`);
-        return [];
+/**
+ * Custom error class for API failures.
+ */
+class ApiError extends Error {
+    constructor(message, details = {}) {
+        super(message);
+        this.name = "ApiError";
+        this.details = details;
     }
 }
 
-async function postDataToSheet(payload) {
-    if (SHEET_API_URL === "YOUR_APPS_SCRIPT_WEB_APP_URL_GOES_HERE") {
-        alert("CRITICAL ERROR: Please replace 'YOUR_APPS_SCRIPT_WEB_APP_URL_GOES_HERE' in script.js with your published Apps Script URL.");
-        return { status: 'error', message: 'API URL not set.' };
-    }
+/**
+ * General utility to send data to the Google Apps Script Web App.
+ * @param {object} data The payload to send.
+ * @returns {Promise<object>} The JSON response from the Apps Script.
+ */
+async function postDataToSheet(data) {
     try {
+        if (SHEET_API_URL.includes("YOUR_APPS_SCRIPT_URL_HERE")) {
+            throw new ApiError("SHEET_API_URL has not been updated.", { url: SHEET_API_URL });
+        }
+
         const response = await fetch(SHEET_API_URL, {
             method: 'POST',
-            mode: 'cors',
-            cache: 'no-cache',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
+            mode: 'cors', // Crucial for cross-origin requests
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
         });
 
+        // Check if the HTTP response itself was successful (status 200-299)
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            console.error(`[Hi Tek API Error] HTTP Error Status: ${response.status} ${response.statusText}. Check if the Apps Script URL is correct and deployed as a Web App.`);
+            throw new ApiError(`HTTP Error: ${response.status} ${response.statusText}`, { status: response.status });
         }
-        
+
+        // Try to parse the JSON response
         const result = await response.json();
         
-        if (result.status !== 'success') {
-            console.error('API Post Error:', result.message);
-            throw new Error(result.message || 'Server reported an error.');
+        // Check for an error status returned by the Apps Script's apiWrapper
+        if (result.status === 'error') {
+            // Log the detailed server error from Code.gs
+            console.error('[Hi Tek API Error] Server-side error received:', result.errorDetail || result.message);
+            throw new ApiError(result.message, { detail: result.errorDetail });
         }
 
         return result;
 
     } catch (error) {
-        console.error(`Post failed for action ${payload.action}:`, error);
-        alert(`Failed to save data. Please check the console for details.`);
-        return { status: 'error', message: error.message };
-    }
-}
-
-
-// ==============================================================================
-// 3. CORE LOGIC FUNCTIONS
-// ==============================================================================
-
-async function loadProjects() {
-    allProjects = await fetchDataFromSheet('getProjects');
-    
-    const selector = document.getElementById('projectSelector');
-    selector.innerHTML = ''; 
-    
-    const validProjects = allProjects.filter(project => String(project.ProjectID).trim());
-
-    if (validProjects.length === 0) {
-        selector.innerHTML = '<option value="">-- No Projects Found --</option>';
-        document.getElementById('currentProjectName').textContent = 'Please add a project.';
-        // Clear dashboard view when no projects are present
-        currentProjectID = null;
-        renderDashboard(); 
-        return;
-    }
-
-    validProjects.forEach(project => {
-        const option = document.createElement('option');
-        option.value = String(project.ProjectID).trim(); 
-        option.textContent = project.Name;
-        selector.appendChild(option);
-    });
-
-    const storedProjectID = localStorage.getItem('currentProjectID');
-    const projectToSelect = validProjects.find(p => String(p.ProjectID).trim() === storedProjectID) 
-                            ? storedProjectID 
-                            : validProjects[0].ProjectID;
-
-    selector.value = String(projectToSelect).trim();
-    handleProjectSelectionChange(String(projectToSelect).trim());
-}
-
-function handleProjectSelectionChange(id) {
-    currentProjectID = id;
-    localStorage.setItem('currentProjectID', id);
-    if (currentProjectID) {
-        renderDashboard();
-    }
-}
-
-async function renderDashboard() {
-    if (!currentProjectID) {
-        // Clear all dashboard elements if no project is selected
-        document.getElementById('currentProjectName').textContent = 'Select a Project';
-        document.getElementById('taskTableBody').innerHTML = '<tr><td colspan="5">No tasks loaded...</td></tr>';
-        document.getElementById('materialTableBody').innerHTML = '<tr><td colspan="5">No materials loaded...</td></tr>';
-        document.getElementById('recentExpensesList').innerHTML = '<li class="placeholder">No expenses loaded...</li>';
+        if (error instanceof ApiError) {
+            throw error; // Re-throw custom errors
+        }
         
-        // Reset KPIs and details display
-        renderProjectDetails({});
-        renderKPIs({}, [], [], []);
-        return;
+        // Catch general network or JSON parsing errors
+        console.error('[Hi Tek API Error] Network or Parsing Failure:', error.message);
+        console.warn('Common Fixes: 1. Ensure Apps Script is deployed as a Web App. 2. Verify the URL ends in /exec. 3. Check for CORS/Mixed Content warnings in the console.');
+        throw new ApiError("Could not connect to the Google Sheet. Details in console.", { originalError: error.message });
     }
+}
 
-    // Show loading state
-    document.getElementById('currentProjectName').textContent = 'Loading...';
+/**
+ * Shows an alert box for errors.
+ * @param {string} message The error message to display.
+ */
+function displayError(message) {
+    // We are replacing alert() with a modal/message box in a real environment
+    // For this context, we will use the console to ensure we don't block the UI
+    console.error(`[APP ERROR] ${message}`);
+    // Optional: display a message in a prominent UI element if available
+    const msgElement = document.getElementById('statusMessage');
+    if (msgElement) {
+        msgElement.textContent = message;
+        msgElement.classList.add('error');
+        setTimeout(() => {
+            msgElement.textContent = '';
+            msgElement.classList.remove('error');
+        }, 8000);
+    } else {
+        alert(message);
+    }
+}
 
+// --- 3. DATA FETCHING AND RENDERING ---
+
+/**
+ * Loads the list of projects for the selector.
+ */
+async function loadProjects() {
+    const selector = document.getElementById('projectSelector');
+    selector.innerHTML = '<option value="">Loading Projects...</option>'; // Show loading state
+
+    try {
+        // Send a request to fetch all project data (no projectID means all projects)
+        const data = await postDataToSheet({ action: 'fetchData' });
+        
+        allProjects = data.projects || [];
+        
+        // If there are no projects, prompt the user to add one
+        if (allProjects.length === 0) {
+            selector.innerHTML = '<option value="">No Projects Found</option>';
+            document.getElementById('currentProjectName').textContent = 'Add a New Project';
+            // Clear the dashboard view
+            clearDashboardData();
+            return;
+        }
+
+        // Populate the selector
+        selector.innerHTML = '';
+        allProjects.forEach(p => {
+            const option = document.createElement('option');
+            // Ensure ID is treated as a string for comparison consistency
+            option.value = String(p.ProjectID).trim();
+            option.textContent = `${option.value} - ${p.Name}`;
+            selector.appendChild(option);
+        });
+
+        // Set the currently selected project (either the first one or the previously selected one)
+        const initialProjectID = selector.options[0].value;
+        selector.value = currentProjectID || initialProjectID;
+        currentProjectID = selector.value;
+        
+        // Load the details for the selected project
+        await loadProjectDetails(currentProjectID);
+
+    } catch (e) {
+        displayError(e.message);
+        selector.innerHTML = '<option value="">Connection Error</option>';
+        document.getElementById('currentProjectName').textContent = 'Connection Error';
+    }
+}
+
+/**
+ * Clears the content panels when no project is selected or on error.
+ */
+function clearDashboardData() {
+    document.getElementById('kpi-days-spent').textContent = 'N/A';
+    document.getElementById('kpi-days-left').textContent = 'N/A';
+    document.getElementById('kpi-budget-spent').textContent = 'N/A';
+    document.getElementById('kpi-budget-remaining').textContent = 'N/A';
+    document.getElementById('kpi-task-progress').textContent = 'N/A';
+    document.getElementById('tasksList').innerHTML = '<li class="placeholder">Select a project to view tasks.</li>';
+    document.getElementById('recentExpensesList').innerHTML = '<li class="placeholder">No expenses loaded...</li>';
+    document.getElementById('materialsList').innerHTML = '<li class="placeholder">No materials loaded...</li>';
+}
+
+
+/**
+ * Loads all detailed data (Tasks, Expenses) for the selected project.
+ * @param {string} projectID The ID of the project to load.
+ */
+async function loadProjectDetails(projectID) {
+    if (!projectID) return;
+    currentProjectID = projectID;
+    
     const currentProject = allProjects.find(p => String(p.ProjectID).trim() === String(currentProjectID).trim());
     if (!currentProject) {
         document.getElementById('currentProjectName').textContent = 'Project Not Found';
+        clearDashboardData();
         return;
     }
+    document.getElementById('currentProjectName').textContent = currentProject.Name;
 
-    document.getElementById('currentProjectName').textContent = `${currentProject.Name} (${currentProject.ProjectID})`;
+    try {
+        const data = await postDataToSheet({ 
+            action: 'fetchData', 
+            projectID: projectID 
+        });
 
-    renderProjectDetails(currentProject);
-
-    // Fetch all related data in parallel
-    const [tasks, expenses, materials] = await Promise.all([
-        fetchDataFromSheet('getTasks', currentProjectID),
-        fetchDataFromSheet('getExpenses', currentProjectID),
-        fetchDataFromSheet('getMaterials', currentProjectID)
-    ]);
-    
-    // Sort tasks numerically (important for dependency logic)
-    const sortedTasks = tasks.sort((a, b) => {
-        const numA = parseInt(a.Name);
-        const numB = parseInt(b.Name);
-        return numA - numB;
-    });
-
-    renderTaskTable(sortedTasks);
-    populateTaskUpdateSelector(sortedTasks); 
-    
-    renderRecentExpenses(expenses);
-    
-    renderMaterialTable(materials);
-    populateMaterialSelector(materials);
-    
-    renderKPIs(currentProject, sortedTasks, expenses, materials);
-}
-
-function renderProjectDetails(project) {
-    const formatAmount = (amount) => {
-        if (!amount || isNaN(Number(amount))) return 'N/A';
-        return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(Number(amount));
-    };
-
-    document.getElementById('display-name').textContent = project.Name || 'N/A';
-    document.getElementById('display-start-date').textContent = project.StartDate ? new Date(project.StartDate).toLocaleDateString() : 'N/A';
-    document.getElementById('display-deadline').textContent = project.Deadline ? new Date(project.Deadline).toLocaleDateString() : 'N/A';
-    document.getElementById('display-location').textContent = project.Location || 'N/A';
-    document.getElementById('display-amount').textContent = formatAmount(project.Amount);
-    document.getElementById('display-contractor').textContent = project.Contractor || 'N/A';
-    document.getElementById('display-engineers').textContent = project.Engineers || 'N/A';
-    document.getElementById('display-contact1').textContent = project.Contact1 || 'N/A';
-    document.getElementById('display-contact2').textContent = project.Contact2 || 'N/A';
-
-    // Populate edit form
-    document.getElementById('input-name').value = project.Name || '';
-    document.getElementById('input-start-date').value = project.StartDate ? project.StartDate.split('T')[0] : '';
-    document.getElementById('input-deadline').value = project.Deadline ? project.Deadline.split('T')[0] : '';
-    document.getElementById('input-location').value = project.Location || '';
-    document.getElementById('input-amount').value = project.Amount || '';
-    document.getElementById('input-contractor').value = project.Contractor || '';
-    document.getElementById('input-engineers').value = project.Engineers || '';
-    document.getElementById('input-contact1').value = project.Contact1 || '';
-    document.getElementById('input-contact2').value = project.Contact2 || '';
-}
-
-function renderRecentExpenses(expenses) {
-    const list = document.getElementById('recentExpensesList');
-    list.innerHTML = '';
-    
-    if (expenses.length === 0) {
-        list.innerHTML = '<li class="placeholder">No expenses recorded yet.</li>';
-        return;
-    }
-
-    const recentExpenses = expenses.sort((a, b) => new Date(b.Date) - new Date(a.Date)).slice(0, 5);
-
-    recentExpenses.forEach(expense => {
-        const dateString = expense.Date ? new Date(expense.Date).toLocaleDateString() : 'N/A';
-        const formattedAmount = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(Number(expense.Amount));
+        const tasks = data.projectData.tasks || [];
+        const expenses = data.projectData.expenses || [];
         
-        const listItem = document.createElement('li');
-        listItem.innerHTML = `
-            <span class="expense-date">[${dateString}]</span>
-            <span class="expense-desc">${expense.Description}</span>
-            <span class="expense-amount">${formattedAmount} (${expense.Category})</span>
-        `;
-        list.appendChild(listItem);
-    });
-}
-
-function renderMaterialTable(materials) {
-    const tableBody = document.getElementById('materialTableBody');
-    tableBody.innerHTML = '';
-
-    if (materials.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="5">No materials recorded for this project.</td></tr>';
-        return;
-    }
-    
-    materials.forEach(material => {
-        const required = Number(material.RequiredQty) || 0;
-        const dispatched = Number(material.DispatchedQty) || 0; 
-        const balance = required - dispatched;
-        const percentage = required > 0 ? Math.min(100, Math.round((dispatched / required) * 100)) : 0;
+        // Now render all parts of the dashboard
+        renderKPIs(currentProject, tasks, expenses);
+        renderTasks(tasks);
+        renderExpenses(expenses);
         
-        const balanceClass = balance > 0 ? 'status-pending' : (balance <= 0 ? 'status-complete' : '');
+        // Fetch and render materials separately as materials sheet can be large
+        await loadMaterials(projectID);
 
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${material.ItemName || 'N/A'}</td>
-            <td>${required} ${material.Unit || ''}</td>
-            <td>${dispatched} ${material.Unit || ''}</td>
-            <td class="${balanceClass}">${balance} ${material.Unit || ''}</td>
-            <td>
-                <div class="progress-container">
-                    <div class="progress-bar" style="width: ${percentage}%;"></div>
-                    <span class="progress-text">${percentage}%</span>
-                </div>
-            </td>
-        `;
-        tableBody.appendChild(row);
-    });
+    } catch (e) {
+        displayError(e.message);
+        clearDashboardData();
+    }
 }
 
-function populateMaterialSelector(materials) {
-    const selector = document.getElementById('materialItemId');
-    selector.innerHTML = '<option value="">-- Select Existing Material --</option>';
-
-    if (materials.length === 0) return;
-
-    materials.forEach(material => {
-        const option = document.createElement('option');
-        option.value = material.ItemName; 
-        option.textContent = `${material.ItemName} (Req: ${material.RequiredQty} ${material.Unit})`;
-        selector.appendChild(option);
-    });
-}
-
-
-function renderKPIs(project, tasks, expenses, materials) {
-    const startDate = project.StartDate ? new Date(project.StartDate) : null;
-    const deadline = project.Deadline ? new Date(project.Deadline) : null;
+/**
+ * Renders the KPIs section of the dashboard.
+ * @param {object} project The current project object.
+ * @param {Array<object>} tasks List of tasks.
+ * @param {Array<object>} expenses List of expenses.
+ */
+function renderKPIs(project, tasks, expenses) {
+    // --- Date KPIs ---
+    const startDate = new Date(project.StartDate);
+    const deadlineDate = new Date(project.Deadline);
     const today = new Date();
     
-    const calculateDays = (date1, date2) => {
-        if (!date1 || !date2) return 'N/A';
-        const diffTime = Math.abs(date2 - date1);
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        return diffDays;
-    };
-
-    const formatAmount = (amount) => {
-        if (isNaN(Number(amount)) || Number(amount) === 0) return '₹ 0';
-        return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(Number(amount));
-    };
-
-    const daysSpent = startDate ? calculateDays(startDate, today) : 'N/A';
-    let daysLeft = deadline ? Math.max(0, Math.ceil((deadline - today) / (1000 * 60 * 60 * 24))) : 'N/A';
-    document.getElementById('kpi-days-spent').textContent = daysSpent !== 'N/A' ? `${daysSpent} days` : 'N/A';
-    document.getElementById('kpi-days-left').textContent = daysLeft !== 'N/A' ? `${daysLeft} days` : 'N/A';
-
-    let overallProgress = 0;
-    const tasksWithProgress = tasks.filter(task => Number(task.Progress) >= 0);
-
-    if (tasksWithProgress.length > 0) {
-        const totalProgress = tasksWithProgress.reduce((sum, task) => sum + (Number(task.Progress) || 0), 0);
-        overallProgress = Math.round(totalProgress / tasksWithProgress.length);
-    }
-    document.getElementById('kpi-progress').textContent = `${overallProgress}%`;
-
-    const workOrderAmount = Number(project.Amount) || 0;
-    const totalExpenses = expenses.reduce((sum, expense) => sum + (Number(expense.Amount) || 0), 0);
-    document.getElementById('kpi-work-order').textContent = formatAmount(workOrderAmount);
-    document.getElementById('kpi-total-expenses').textContent = formatAmount(totalExpenses);
+    // Calculate days spent
+    const timeSpentMs = today.getTime() - startDate.getTime();
+    const daysSpent = Math.max(0, Math.floor(timeSpentMs / (1000 * 60 * 60 * 24)));
     
-    let overallMaterialProgress = 0;
-    if (materials.length > 0) {
-        const totalRequired = materials.reduce((sum, m) => sum + (Number(m.RequiredQty) || 0), 0);
-        const totalDispatched = materials.reduce((sum, m) => sum + (Number(m.DispatchedQty) || 0), 0);
-        
-        if (totalRequired > 0) {
-            overallMaterialProgress = Math.min(100, Math.round((totalDispatched / totalRequired) * 100));
-        }
+    // Calculate days remaining
+    const timeRemainingMs = deadlineDate.getTime() - today.getTime();
+    const daysLeft = Math.ceil(timeRemainingMs / (1000 * 60 * 60 * 24));
+
+    document.getElementById('kpi-days-spent').textContent = `${daysSpent} days`;
+    document.getElementById('kpi-days-left').textContent = `${daysLeft > 0 ? daysLeft : 0} days`;
+
+    // --- Financial KPIs ---
+    const budget = parseFloat(String(project.Budget).replace(/[^0-9.]/g, '')) || 0;
+    const totalSpent = expenses.reduce((sum, exp) => sum + (parseFloat(exp.Amount) || 0), 0);
+    const remainingBudget = budget - totalSpent;
+    
+    document.getElementById('kpi-budget-spent').textContent = `₹${totalSpent.toFixed(2)}`;
+    document.getElementById('kpi-budget-remaining').textContent = `₹${remainingBudget.toFixed(2)}`;
+    
+    const budgetStatusElement = document.getElementById('kpi-budget-remaining').closest('.kpi-box');
+    budgetStatusElement.classList.toggle('kpi-warning', remainingBudget < budget * 0.1 && remainingBudget >= 0);
+    budgetStatusElement.classList.toggle('kpi-danger', remainingBudget < 0);
+
+    // --- Task Progress KPI ---
+    const totalTasks = tasks.length;
+    const completedTasks = tasks.filter(t => t.Status === 'Completed').length;
+    
+    let progressPercent = 0;
+    if (totalTasks > 0) {
+        progressPercent = Math.round((completedTasks / totalTasks) * 100);
     }
-    document.getElementById('kpi-material-progress').textContent = `${overallMaterialProgress}% Dispatched`;
+    
+    document.getElementById('kpi-task-progress').textContent = `${progressPercent}% Complete`;
+    document.getElementById('kpi-task-progress').closest('.kpi-box').style.background = 
+        `linear-gradient(to right, #28a745 0%, #28a745 ${progressPercent}%, #e9ecef ${progressPercent}%, #e9ecef 100%)`;
 }
 
-function populateTaskUpdateSelector(tasks) {
-    const taskSelector = document.getElementById('taskId');
-    taskSelector.innerHTML = '<option value="">-- Select a Task --</option>';    
-
-    if (tasks.length === 0) return;
-
-    let isPreviousTaskComplete = true; 
-
-    tasks.forEach((task, index) => {
-        const option = document.createElement('option');
-        option.value = String(task.Name).trim(); 
-        option.textContent = `${task.Name} (${task.Progress || 0}%) - ${task.Responsible}`;
-
-        // Dependency Logic (lock current if previous is incomplete)
-        if (index > 0) {
-            const previousTask = tasks[index - 1];
-            if (Number(previousTask.Progress) < 100) {
-                isPreviousTaskComplete = false;
-            }
-        }
-        
-        if (!isPreviousTaskComplete && Number(task.Progress) < 100) {
-             option.disabled = true;
-             option.textContent += ' (LOCKED)';
-        }
-
-        taskSelector.appendChild(option);
-
-        // Reset the flag if the current task is still incomplete
-        if (Number(task.Progress) < 100) {
-            isPreviousTaskComplete = false;
-        }
-    });
-
-    taskSelector.onchange = function handler(e) {
-    const selectedTask = tasks.find(t => String(t.Name).trim() === String(e.target.value).trim());
-    if (selectedTask) {
-        document.getElementById('taskProgress').value = String(selectedTask.Progress || 0); 
-        document.getElementById('taskDue').value = selectedTask.DueDate ? selectedTask.DueDate.split('T')[0] : '';
-    }
-};
-}
-
-function renderTaskTable(tasks) {
-    const tableBody = document.getElementById('taskTableBody');
-    tableBody.innerHTML = '';
+/**
+ * Renders the task list.
+ * @param {Array<object>} tasks List of tasks for the current project.
+ */
+function renderTasks(tasks) {
+    const list = document.getElementById('tasksList');
+    list.innerHTML = '';
 
     if (tasks.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="5">No tasks defined for this project.</td></tr>';
+        list.innerHTML = '<li class="placeholder">No tasks found for this project.</li>';
+        return;
+    }
+
+    tasks.sort((a, b) => {
+        // Sort by Pending, then In Progress, then Completed
+        const statusOrder = { 'Pending': 1, 'In Progress': 2, 'Completed': 3 };
+        return statusOrder[a.Status] - statusOrder[b.Status];
+    });
+
+    tasks.forEach(task => {
+        const item = document.createElement('li');
+        item.className = 'task-item';
+        item.classList.add(`status-${task.Status.toLowerCase().replace(/\s/g, '-')}`); // e.g., status-in-progress
+
+        const completionDate = task.CompletionDate ? new Date(task.CompletionDate).toLocaleDateString() : 'N/A';
+
+        item.innerHTML = `
+            <div class="task-info">
+                <span class="task-name">${task.TaskName}</span>
+                <span class="task-responsible">(${task.Responsible})</span>
+            </div>
+            <div class="task-status">
+                <select data-task-name="${task.TaskName}" class="status-selector">
+                    <option value="Pending" ${task.Status === 'Pending' ? 'selected' : ''}>Pending</option>
+                    <option value="In Progress" ${task.Status === 'In Progress' ? 'selected' : ''}>In Progress</option>
+                    <option value="Completed" ${task.Status === 'Completed' ? 'selected' : ''}>Completed</option>
+                </select>
+                <span class="completion-date">Completed: ${completionDate}</span>
+            </div>
+        `;
+        list.appendChild(item);
+    });
+    
+    // Add event listeners to all new status selectors
+    document.querySelectorAll('.status-selector').forEach(select => {
+        select.addEventListener('change', handleStatusChange);
+    });
+}
+
+/**
+ * Renders the expense history list.
+ * @param {Array<object>} expenses List of expenses for the current project.
+ */
+function renderExpenses(expenses) {
+    const list = document.getElementById('recentExpensesList');
+    list.innerHTML = '';
+
+    if (expenses.length === 0) {
+        list.innerHTML = '<li class="placeholder">No expenses recorded for this project.</li>';
         return;
     }
     
-    tasks.forEach((task, index) => {
-        const progressPercent = Number(task.Progress) || 0;
-        const statusClass = progressPercent === 100 ? 'status-complete' : (progressPercent > 0 ? 'status-in-progress' : 'status-pending');
-        const dueDateString = task.DueDate ? new Date(task.DueDate).toLocaleDateString() : 'N/A';
+    // Sort by date (newest first) and limit to 10
+    expenses.sort((a, b) => new Date(b.Date) - new Date(a.Date));
+    const recentExpenses = expenses.slice(0, 10);
 
-        const row = document.createElement('tr');
-        row.setAttribute('data-progress', progressPercent); 
-        
-        row.innerHTML = `
-            <td>${task.Name || 'N/A'}</td>
-            <td>${task.Responsible || 'N/A'}</td>
-            <td>
-                <div class="progress-container">
-                    <div class="progress-bar" style="width: ${progressPercent}%;"></div>
-                    <span class="progress-text">${progressPercent}%</span>
-                </div>
-            </td>
-            <td>${dueDateString}</td>
-            <td class="${statusClass} status-cell">${progressPercent === 100 ? 'Complete' : (progressPercent > 0 ? 'In Progress' : 'Pending')}</td>
+    recentExpenses.forEach(exp => {
+        const item = document.createElement('li');
+        const amount = (parseFloat(exp.Amount) || 0).toFixed(2);
+        const date = new Date(exp.Date).toLocaleDateString();
+
+        item.innerHTML = `
+            <div class="expense-details">
+                <span class="expense-description">${exp.Description}</span>
+                <span class="expense-category">(${exp.Category})</span>
+            </div>
+            <span class="expense-amount">₹${amount}</span>
+            <span class="expense-date">${date}</span>
         `;
-        tableBody.appendChild(row);
+        list.appendChild(item);
     });
 }
 
+/**
+ * Loads and renders the materials list.
+ * @param {string} projectID The ID of the project to load.
+ */
+async function loadMaterials(projectID) {
+    const list = document.getElementById('materialsList');
+    list.innerHTML = '<li class="placeholder">Loading materials...</li>';
+    try {
+        const data = await postDataToSheet({ 
+            action: 'fetchMaterials', 
+            projectID: projectID 
+        });
+        const materials = data.materials || [];
 
-// ==============================================================================
-// 4. EVENT LISTENERS (Send Data to Sheet)
-// ==============================================================================
+        list.innerHTML = '';
+        if (materials.length === 0) {
+            list.innerHTML = '<li class="placeholder">No materials records found.</li>';
+            return;
+        }
 
-document.getElementById('editProjectDetailsBtn').addEventListener('click', () => {
-    document.getElementById('projectDetailsDisplay').style.display = 'none';
-    document.getElementById('projectDetailsEdit').style.display = 'block';
-    document.getElementById('editProjectDetailsBtn').style.display = 'none';
-    document.getElementById('saveProjectDetailsBtn').style.display = 'block';
-});
+        materials.forEach(mat => {
+            const item = document.createElement('li');
+            const date = mat.OrderDate ? new Date(mat.OrderDate).toLocaleDateString() : 'N/A';
+            item.innerHTML = `
+                <div class="material-info">
+                    <span class="material-name">${mat.MaterialName}</span>
+                    <span class="material-supplier">(${mat.Supplier || 'Unknown Supplier'})</span>
+                </div>
+                <span class="material-quantity">${mat.Quantity} ${mat.Unit}</span>
+                <span class="material-date">${date}</span>
+            `;
+            list.appendChild(item);
+        });
 
-document.getElementById('saveProjectDetailsBtn').addEventListener('click', async () => {
-    if (!currentProjectID) return alert('No project is selected.');
-
-    const data = {
-        ProjectID: currentProjectID, 
-        Name: document.getElementById('input-name').value,
-        StartDate: document.getElementById('input-start-date').value,
-        Deadline: document.getElementById('input-deadline').value,
-        Location: document.getElementById('input-location').value,
-        Amount: document.getElementById('input-amount').value,
-        Contractor: document.getElementById('input-contractor').value,
-        Engineers: document.getElementById('input-engineers').value,
-        Contact1: document.getElementById('input-contact1').value,
-        Contact2: document.getElementById('input-contact2').value,
-    };
-    
-    const payload = { action: 'updateProject', projectID: currentProjectID, data: data };
-    
-    const result = await postDataToSheet(payload); 
-
-    if (result.status === 'success') {
-        alert('Project details saved online successfully!');
-        document.getElementById('projectDetailsDisplay').style.display = 'block';
-        document.getElementById('projectDetailsEdit').style.display = 'none';
-        document.getElementById('editProjectDetailsBtn').style.display = 'block';
-        document.getElementById('saveProjectDetailsBtn').style.display = 'none';
-        await loadProjects(); 
-    } else {
-        alert(`Failed to save project details: ${result.message}`);
+    } catch (e) {
+        list.innerHTML = `<li class="placeholder error">Failed to load materials: ${e.message}</li>`;
+        console.error("Material load error:", e);
     }
-});
+}
+
+
+// --- 4. EVENT HANDLERS ---
 
 document.getElementById('projectSelector').addEventListener('change', (e) => {
-    handleProjectSelectionChange(e.target.value);
+    loadProjectDetails(e.target.value);
 });
+
+
+/**
+ * Handles the change event for a task status selector.
+ * @param {Event} e The change event.
+ */
+async function handleStatusChange(e) {
+    const selector = e.target;
+    const taskName = selector.dataset.taskName;
+    const newStatus = selector.value;
+    const originalStatus = selector.options[selector.selectedIndex === 0 ? 2 : selector.selectedIndex - 1]?.value || 'Pending';
+    
+    if (!currentProjectID || !taskName) return;
+
+    try {
+        // Optimistic UI update (optional, but good practice)
+        selector.closest('.task-item').classList.remove(`status-${originalStatus.toLowerCase().replace(/\s/g, '-')}`);
+        selector.closest('.task-item').classList.add(`status-${newStatus.toLowerCase().replace(/\s/g, '-')}`);
+        
+        const payload = {
+            action: 'updateTaskStatus',
+            projectID: currentProjectID,
+            taskName: taskName,
+            newStatus: newStatus
+        };
+        
+        await postDataToSheet(payload);
+        
+        // Reload details to update KPIs and completion dates
+        await loadProjectDetails(currentProjectID);
+
+    } catch (e) {
+        displayError(`Failed to update task status: ${e.message}`);
+        // Revert UI on failure
+        selector.value = originalStatus;
+        selector.closest('.task-item').classList.remove(`status-${newStatus.toLowerCase().replace(/\s/g, '-')}`);
+        selector.closest('.task-item').classList.add(`status-${originalStatus.toLowerCase().replace(/\s/g, '-')}`);
+    }
+}
 
 document.getElementById('expenseEntryForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!currentProjectID) return alert('Please select a project first.');
+
+    if (!currentProjectID) {
+        displayError('Please select a project before recording an expense.');
+        return;
+    }
 
     const form = e.target;
-    const payload = {
-        action: 'addExpense',
+    const expenseData = {
+        action: 'recordExpense',
         projectID: currentProjectID,
         date: form.expenseDate.value,
         description: form.expenseDescription.value,
-        amount: Number(form.expenseAmount.value),
-        category: form.expenseCategory.value,
+        amount: parseFloat(form.expenseAmount.value),
+        category: form.expenseCategory.value
     };
 
-    const result = await postDataToSheet(payload);
-    
-    if (result.status === 'success') {
+    try {
+        await postDataToSheet(expenseData);
         alert('Expense recorded successfully!');
-        form.reset(); 
-        renderDashboard(); 
-    } else {
-        alert(`Failed to record expense: ${result.message}`);
-    }
-});
-
-
-document.getElementById('updateTaskForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    if (!currentProjectID) return alert('Please select a project first.');
-
-    const form = e.target;
-    const taskName = form.taskId.value;
-    
-    if (!taskName) return alert('Please select a task to update.');
-
-    const payload = {
-        action: 'updateTask',
-        projectID: currentProjectID,
-        taskName: taskName,
-        progress: Number(form.taskProgress.value),
-        dueDate: form.taskDue.value,
-    };
-
-    const result = await postDataToSheet(payload);
-    
-    if (result.status === 'success') {
-        alert('Task updated successfully!');
-        form.reset(); 
-        renderDashboard(); 
-    } else {
-        alert(`Failed to update task: ${result.message}`);
-    }
-});
-
-document.getElementById('recordDispatchForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    if (!currentProjectID) return alert('Please select a project first.');
-
-    const form = e.target;
-    
-    const selectedItemName = document.getElementById('materialItemId')?.value || ''; 
-    const newMaterialName = (document.getElementById('newMaterialName')?.value || '').trim();
-    const dispatchQuantity = Number(form.dispatchQuantity.value);
-    
-    let itemName = '';
-    let isNewMaterial = false;
-
-    if (selectedItemName !== '') {
-        itemName = selectedItemName;
-    } else if (newMaterialName !== '') { 
-        itemName = newMaterialName;
-        isNewMaterial = true;
-    } else {
-        return alert('Please select an existing material OR enter a new material name.');
-    }
-    
-    // Validation: Only allow dispatchQuantity of 0 when adding a NEW material
-    if (!isNewMaterial && (dispatchQuantity <= 0 || isNaN(dispatchQuantity))) {
-        return alert('When updating an existing material, Dispatch Quantity must be 1 or greater.');
-    }
-    if (isNewMaterial && (dispatchQuantity < 0 || isNaN(dispatchQuantity))) {
-        return alert('Dispatch Quantity cannot be negative.');
-    }
-
-    if (!form.materialUnit.value.trim()) {
-        return alert('Please enter a Unit (e.g., Unit, Ton).');
-    }
-    
-    if (isNewMaterial) {
-        if (!form.requiredQuantity.value || Number(form.requiredQuantity.value) <= 0) {
-            return alert('Please enter a valid Required Quantity when adding a new material.');
-        }
-    }
-
-    const payload = {
-        action: 'recordDispatch',
-        projectID: currentProjectID,
-        itemName: itemName,
-        dispatchQuantity: dispatchQuantity,
-        unit: form.materialUnit.value,
-        requiredQuantity: isNewMaterial ? Number(form.requiredQuantity.value) : undefined, 
-        dispatchDate: new Date().toISOString().split('T')[0]
-    };
-
-    const result = await postDataToSheet(payload);
-
-    if (result.status === 'success') {
-        alert(`Material dispatch recorded for ${itemName} successfully!`);
-        form.reset(); 
-        renderDashboard(); 
-    } else {
-        alert(`Failed to record dispatch: ${result.message}`);
+        form.reset();
+        
+        // Reload details to update KPIs and expense list
+        await loadProjectDetails(currentProjectID);
+        
+    } catch (e) {
+        displayError(`Failed to record expense: ${e.message}`);
     }
 });
 
 
 document.getElementById('addProjectBtn').addEventListener('click', async () => {
-    const newName = prompt("Enter the Name for the New Project:");
+    const newName = prompt("Enter the New Project Name:");
     if (!newName) return;
+
+    const newID = prompt(`Enter a unique Project ID (e.g., HT-003):`);
+    if (!newID) return;
     
-    // Create a new unique ID
-    const newID = 'P' + Date.now().toString().slice(-4); 
+    if (allProjects.some(p => String(p.ProjectID).trim() === String(newID).trim())) {
+        return alert('Project ID must be unique. This ID already exists.');
+    }
+
+    const startDate = prompt("Enter Start Date (YYYY-MM-DD):");
+    if (!startDate) return;
+
+    const deadline = prompt("Enter Deadline (YYYY-MM-DD):");
+    if (!deadline) return;
+
+    const budget = prompt("Enter Project Budget (e.g., 500000):");
+    if (!budget || isNaN(parseFloat(budget))) return alert('Invalid budget entered.');
     
     const payload = {
-        action: 'addProjectWithTasks', 
+        action: 'addNewProject',
         projectID: newID,
-        projectData: {
-            Name: newName, 
-            ProjectID: newID, 
-            StartDate: new Date().toISOString().split('T')[0], 
-            Deadline: new Date().toISOString().split('T')[0], 
-            Location: 'New Site', 
-            Amount: 0,
-            Contractor: 'TBD', 
-            Engineers: 'TBD', 
-            Contact1: '', 
-            Contact2: ''
+        name: newName,
+        startDate: startDate,
+        deadline: deadline,
+        budget: parseFloat(budget),
+        // Add minimal mock data for other fields if needed, but Code.gs handles these
+        metadata: {
+            creationDate: new Date().toISOString(),
+            status: 'Active',
+            notes: ''
         },
         defaultTasks: HI_TEK_TASKS_MAP 
     };
     
-    const result = await postDataToSheet(payload);
-    
-    if (result.status === 'success') {
+    try {
+        await postDataToSheet(payload);
         alert(`Project "${newName}" added successfully with ID ${newID}. All 23 official tasks are now loaded to the sheet.`);
-    } else {
-        alert(`Failed to add project. Please check the console.`);
+    } catch (e) {
+        displayError(`Failed to add project: ${e.message}`);
     }
     
     await loadProjects();
 });
 
 document.getElementById('deleteProjectBtn').addEventListener('click', () => {
-    if (!currentProjectID) return alert('No project is selected.');
+    if (!currentProjectID) return displayError('No project is selected.');
     const currentProject = allProjects.find(p => String(p.ProjectID).trim() === String(currentProjectID).trim());
     
     // NOTE: Manual deletion is advised for comprehensive cleanup across multiple sheets.
@@ -652,5 +538,3 @@ document.getElementById('deleteProjectBtn').addEventListener('click', () => {
 // ==============================================================================
 
 document.addEventListener('DOMContentLoaded', loadProjects);
-
-
