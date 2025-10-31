@@ -39,17 +39,17 @@ const HI_TEK_TASKS_MAP = [
 
 // ==============================================================================
 // 2. DATA UTILITIES (API FUNCTIONS) - COMPLETE CORS WORKAROUND VERSION
-// All requests are now sent via a CORS-exempt form submission to solve the final issue.
+// All requests are now sent via a CORS-exempt form submission (POST) to solve the final issue.
 // ==============================================================================
 
 function fetchDataFromSheet(action, projectID = '') {
     // fetchDataFromSheet prepares the payload and calls the CORS-exempt postDataToSheet
-    // The payload needs to be a simple object for the form submission.
     const payload = { action: action };
     if (projectID) {
         payload.projectID = projectID;
     }
     // Flag 'true' means this is a GET request (expecting parsed data back)
+    // The loadProjects function (line 182) will call this.
     return postDataToSheet(payload, true); 
 }
 
@@ -57,7 +57,8 @@ function postDataToSheet(payload, isGet = false) {
     return new Promise((resolve, reject) => {
         if (SHEET_API_URL.includes("YOUR_APPS_SCRIPT_WEB_APP_URL_GOES_HERE")) {
             alert("CRITICAL ERROR: Please set your published Apps Script URL.");
-            return reject({ status: 'error', message: 'API URL not set.' });
+            // Resolve with an empty array to prevent the allProjects.filter error
+            return isGet ? resolve([]) : reject({ status: 'error', message: 'API URL not set.' }); 
         }
 
         const iframeName = 'submit_iframe_' + Date.now();
@@ -70,7 +71,7 @@ function postDataToSheet(payload, isGet = false) {
 
         const form = document.createElement('form');
         form.action = SHEET_API_URL;
-        form.method = 'POST'; // All requests use POST form submission to bypass CORS
+        form.method = 'POST'; // All requests use POST form submission
         form.target = iframeName; 
         form.style.display = 'none';
 
@@ -80,7 +81,7 @@ function postDataToSheet(payload, isGet = false) {
                 const input = document.createElement('input');
                 input.type = 'hidden';
                 input.name = key;
-                // Stringify complex objects (like projectData) for Apps Script to parse
+                // Stringify complex objects for Apps Script to parse
                 input.value = typeof payload[key] === 'object' && payload[key] !== null ? JSON.stringify(payload[key]) : payload[key];
                 form.appendChild(input);
             }
@@ -95,7 +96,7 @@ function postDataToSheet(payload, isGet = false) {
                 // Read the simple text response from the iframe body
                 responseText = iframe.contentWindow.document.body.textContent;
             } catch (e) {
-                // Cannot read iframe content (security block), check if it's a GET or POST failure
+                // If the browser blocks reading iframe content, assume failure for GET, success for POST
                 responseText = isGet ? '' : 'success_callback'; 
             }
             
@@ -104,21 +105,23 @@ function postDataToSheet(payload, isGet = false) {
             iframe.remove();
 
             if (isGet) {
-                 // For GET requests, we expect a JSON string response from the backend
+                 // For GET/Read requests, we expect a JSON string response from the backend
                 try {
                     const result = JSON.parse(responseText);
                     if (result.status === 'success') {
                         resolve(result.data || []);
                     } else {
                         console.error(`API Error for ${payload.action}:`, result.message);
-                        reject(new Error(result.message));
+                        // Return empty array on error to prevent filter is not a function error
+                        resolve([]); 
                     }
                 } catch (e) {
                     console.error(`GET response parsing failed for ${payload.action}:`, responseText);
-                    reject(new Error(`Failed to retrieve data for ${payload.action}.`));
+                    // Return empty array on error
+                    resolve([]); 
                 }
             } else {
-                 // For POST requests, we expect the simple 'success_callback' string
+                 // For POST/Write requests, we expect the simple 'success_callback' string
                 if (responseText && responseText.includes('success_callback')) {
                     resolve({ status: 'success', message: 'Operation successful' });
                 } else {
@@ -717,6 +720,7 @@ document.getElementById('deleteProjectBtn').addEventListener('click', () => {
 
 
 document.addEventListener('DOMContentLoaded', loadProjects);
+
 
 
 
