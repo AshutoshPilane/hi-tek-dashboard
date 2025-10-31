@@ -4,8 +4,8 @@
 // ==============================================================================
 
 // 🎯 CRITICAL: PASTE YOUR NEW VERIFIED APPS SCRIPT URL HERE!
-// !!! REPLACE THIS PLACEHOLDER AFTER PUBLISHING YOUR GOOGLE APPS SCRIPT !!!
-const SHEET_API_URL = "https://script.google.com/macros/s/AKfycbzxcMcx2Fm7ZW8lWX_1hxYemFP8n35XPbEIswQUm-V2xH4AraXGcdB2TH077BU4aIHVNA/exec"; 
+// The URL below is taken from your console error log, ensuring we test the right endpoint.
+const SHEET_API_URL = "https://script.google.com/macros/s/AKfycbwBbxRIV0e8xUC-Ic4IYJjWRFagLQkZ-w0r5C6pwNysxMldeKw9fkQwm9vOJXyihwyqbA/exec"; 
 
 let currentProjectID = null; 
 let allProjects = [];
@@ -93,8 +93,8 @@ async function postDataToSheet(data) {
         
         // Catch general network or JSON parsing errors
         console.error('[Hi Tek API Error] Network or Parsing Failure:', error.message);
-        console.warn('Common Fixes: 1. Ensure Apps Script is deployed as a Web App. 2. Verify the URL ends in /exec. 3. Check for CORS/Mixed Content warnings in the console.');
-        throw new ApiError("Could not connect to the Google Sheet. Details in console.", { originalError: error.message });
+        console.warn('Common Fixes: 1. Ensure Apps Script is deployed as a Web App. 2. Verify the URL ends in /exec. 3. Check for CORS/Mixed Content warnings in the console. (The current error is a CORS failure which needs the Code.gs fix below!)');
+        throw new ApiError("Could not connect to the Google Sheet. Details in console. Please apply the Code.gs fix below.", { originalError: error.message });
     }
 }
 
