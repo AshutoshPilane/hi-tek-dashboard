@@ -5,7 +5,7 @@
 
 // 🎯 CRITICAL: PASTE YOUR NEW VERIFIED APPS SCRIPT URL HERE!
 // The URL below is taken from your console error log, ensuring we test the right endpoint.
-const SHEET_API_URL = "https://script.google.com/macros/s/AKfycbwBbxRIV0e8xUC-Ic4IYJjWRFagLQkZ-w0r5C6pwNysxMldeKw9fkQwm9vOJXyihwyqbA/exec"; 
+const SHEET_API_URL = "https://script.google.com/macros/s/AKfycbzwxLHSpJ9xQTKfc2wUQaIFzuUeWCxHqAXwueaf4jFXPdAYTTYPvQ_dJHzbZ9-MOkxQ/exec"; 
 
 let currentProjectID = null; 
 let allProjects = [];
@@ -538,3 +538,4 @@ document.getElementById('deleteProjectBtn').addEventListener('click', () => {
 // ==============================================================================
 
 document.addEventListener('DOMContentLoaded', loadProjects);
+
