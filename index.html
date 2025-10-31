@@ -3,227 +3,150 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hi Tek Project Dashboard</title>
-    <link rel="stylesheet" href="style.css">
+    <title>API Fetch Error Fix</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .container {
+            font-family: 'Inter', sans-serif;
+        }
+        .console-box {
+            min-height: 150px;
+        }
+    </style>
 </head>
-<body>
+<body class="bg-gray-50 text-gray-800">
 
-    <header>
-        <h1>Hi Tek Project Dashboard: <span id="currentProjectName">Select a Project</span></h1>
-        <div style="display: flex; gap: 10px; align-items: center;">
-            <label for="projectSelector" style="font-weight: bold;">Current Project:</label>
-            <select id="projectSelector"></select>
-            <button id="addProjectBtn" class="button-primary">➕ New Project</button>
-            <button id="deleteProjectBtn" class="button-secondary">🗑️ Delete Project</button>
-        </div>
-    </header>
+    <div class="container mx-auto p-4 md:p-8 max-w-4xl">
+        <header class="text-center mb-10">
+            <h1 class="text-3xl font-bold text-indigo-700">Project Data Fetcher</h1>
+            <p class="text-gray-600">Robust data retrieval with safe JSON parsing implemented.</p>
+        </header>
 
-    <div class="panel" style="margin-bottom: 20px;">
-        <h2>Key Performance Indicators (KPIs)</h2>
-        <div class="kpi-container">
-            <div class="kpi-box">
-                <div class="label">Days Spent</div>
-                <div class="value" id="kpi-days-spent">N/A</div>
-            </div>
-            <div class="kpi-box">
-                <div class="label">Days Remaining (Deadline)</div>
-                <div class="value" id="kpi-days-left">N/A</div>
-            </div>
-            <div class="kpi-box">
-                <div class="label">Project Progress (Tasks)</div>
-                <div class="value" id="kpi-progress">0%</div>
-            </div>
-            <div class="kpi-box">
-                <div class="label">Material Progress (Dispatched)</div>
-                <div class="value" id="kpi-material-progress">0% Dispatched</div>
-            </div>
-            <div class="kpi-box kpi-full-width">
-                <div class="label">Work Order Amount</div>
-                <div class="value" id="kpi-work-order">₹ 0</div>
-            </div>
-            <div class="kpi-box kpi-full-width">
-                <div class="label">Total Expenses Recorded</div>
-                <div class="value" id="kpi-total-expenses">₹ 0</div>
-            </div>
-        </div>
-    </div>
+        <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-200">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700">Control Panel</h2>
 
-    <div class="dashboard-grid">
-
-        <div class="panel">
-            <h2>Project Details</h2>
-            
-            <div id="projectDetailsDisplay">
-                <ul class="detail-list">
-                    <li><strong>Name:</strong> <span id="display-name">N/A</span></li>
-                    <li><strong>Start Date:</strong> <span id="display-start-date">N/A</span></li>
-                    <li><strong>Deadline:</strong> <span id="display-deadline">N/A</span></li>
-                    <li><strong>Location:</strong> <span id="display-location">N/A</span></li>
-                    <li><strong>Amount:</strong> <span id="display-amount">N/A</span></li>
-                    <li><strong>Contractor:</strong> <span id="display-contractor">N/A</span></li>
-                    <li><strong>Engineers:</strong> <span id="display-engineers">N/A</span></li>
-                    <li><strong>Contact 1:</strong> <span id="display-contact1">N/A</span></li>
-                    <li><strong>Contact 2:</strong> <span id="display-contact2">N/A</span></li>
-                </ul>
-                <button id="editProjectDetailsBtn" class="button-secondary" style="margin-top: 15px;">Edit Details</button>
+            <div class="flex flex-col sm:flex-row gap-4 mb-6 items-center">
+                <div class="flex-grow p-3 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 shadow-sm w-full">
+                    API Endpoint: <strong class="text-indigo-600" id="displayUrl">https://your-api-endpoint.com/api/getProjects</strong> (Update this in the script)
+                </div>
+                <button id="fetchButton" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg transition duration-150 ease-in-out shadow-md hover:shadow-lg w-full sm:w-auto">
+                    Load Projects Safely
+                </button>
             </div>
             
-            <div id="projectDetailsEdit" style="display: none;">
-                <label for="input-name">Name:</label>
-                <input type="text" id="input-name">
-                
-                <label for="input-start-date">Start Date:</label>
-                <input type="date" id="input-start-date">
-                
-                <label for="input-deadline">Deadline:</label>
-                <input type="date" id="input-deadline">
-                
-                <label for="input-location">Location:</label>
-                <input type="text" id="input-location">
-                
-                <label for="input-amount">Amount (INR):</label>
-                <input type="number" id="input-amount" min="0">
-                
-                <label for="input-contractor">Contractor:</label>
-                <input type="text" id="input-contractor">
-                
-                <label for="input-engineers">Engineers:</label>
-                <input type="text" id="input-engineers">
-                
-                <label for="input-contact1">Contact 1:</label>
-                <input type="text" id="input-contact1">
-                
-                <label for="input-contact2">Contact 2:</label>
-                <input type="text" id="input-contact2">
-                
-                <button id="saveProjectDetailsBtn" class="button-primary" style="margin-top: 15px;">Save Details</button>
+            <p class="text-sm text-gray-500 mt-2 italic">
+                The code now checks for empty or non-JSON responses before calling `JSON.parse()`. If an error occurs, the raw response text is logged below for debugging.
+            </p>
+        </div>
+
+        <div class="mt-8">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700">Output Log</h2>
+            <div id="outputLog" class="console-box bg-gray-900 text-green-400 p-4 rounded-xl font-mono text-sm overflow-auto whitespace-pre-wrap shadow-inner">
+                Click "Load Projects Safely" to start the process...
             </div>
         </div>
 
-        <div class="panel">
-            <h2>Task Tracker (23 Steps)</h2>
-            
-            <div class="form-section">
-                <h3>Update Task Status</h3>
-                <form id="updateTaskForm">
-                    <label for="taskId">Select Task:</label>
-                    <select id="taskId" required>
-                        <option value="">-- Select a Task --</option>
-                    </select>
-                    
-                    <label for="taskProgress">Progress (%):</label>
-                    <input type="range" id="taskProgress" min="0" max="100" value="0" oninput="this.nextElementSibling.value=this.value+'%'">
-                    <output>0%</output>
-                    
-                    <label for="taskDue">New Due Date:</label>
-                    <input type="date" id="taskDue">
-                    
-                    <button type="submit" class="button-primary">Update Task</button>
-                </form>
+        <div class="mt-8">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700">Retrieved Data Example</h2>
+            <div id="dataDisplay" class="bg-indigo-100 text-indigo-800 p-4 rounded-xl border border-indigo-300 font-bold text-lg">
+                No data loaded yet.
             </div>
-
-            <h3 style="margin-top: 25px;">Full Project Task List</h3>
-            <div class="table-container">
-                <table id="taskTable">
-                    <thead>
-                        <tr>
-                            <th>Task</th>
-                            <th>Responsible</th>
-                            <th>Progress</th>
-                            <th>Due Date</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody id="taskTableBody">
-                        <tr><td colspan="5">No tasks loaded...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <div class="panel">
-            <h2>Material Dispatch Tracker</h2>
-
-            <div class="form-section">
-                <h3>Record Dispatch/Update Material</h3>
-                <form id="recordDispatchForm">
-                    
-                    <label for="materialItemId">Select Existing Material:</label>
-                    <select id="materialItemId">
-                        <option value="">-- Select Existing Material --</option>
-                    </select>
-
-                    <label for="newMaterialName">OR New Material Name:</label>
-                    <input type="text" id="newMaterialName">
-                    
-                    <label for="requiredQuantity">Required Quantity (Only for New Material):</label>
-                    <input type="number" id="requiredQuantity" min="0">
-                    
-                    <label for="dispatchQuantity">Dispatch Quantity (0 for New Material First Entry):</label>
-                    <input type="number" id="dispatchQuantity" min="0" required>
-
-                    <label for="materialUnit">Unit (e.g., Unit, Ton, M):</label>
-                    <input type="text" id="materialUnit" required>
-
-                    <button type="submit" class="button-primary">Record Dispatch</button>
-                </form>
-            </div>
-            
-            <h3 style="margin-top: 25px;">Material Status Overview</h3>
-            <div class="table-container">
-                <table id="materialTable">
-                    <thead>
-                        <tr>
-                            <th>Item Name</th>
-                            <th>Required Qty</th>
-                            <th>Dispatched Qty</th>
-                            <th>Balance Qty</th>
-                            <th>Progress</th>
-                        </tr>
-                    </thead>
-                    <tbody id="materialTableBody">
-                        <tr><td colspan="5">No materials loaded...</td></tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <div class="panel">
-            <h2>Expense Tracker</h2>
-
-            <div class="form-section">
-                <h3>Record New Expense</h3>
-                <form id="expenseEntryForm">
-                    <label for="expenseDate">Date:</label>
-                    <input type="date" id="expenseDate" required>
-                    
-                    <label for="expenseDescription">Description:</label>
-                    <input type="text" id="expenseDescription" required>
-                    
-                    <label for="expenseAmount">Amount (INR):</label>
-                    <input type="number" id="expenseAmount" min="0" required>
-
-                    <label for="expenseCategory">Category:</label>
-                    <select id="expenseCategory" required>
-                        <option value="Material">Material</option>
-                        <option value="Labor">Labor</option>
-                        <option value="Logistics">Logistics</option>
-                        <option value="Overhead">Overhead</option>
-                        <option value="Other">Other</option>
-                    </select>
-
-                    <button type="submit" class="button-primary">Record Expense</button>
-                </form>
-            </div>
-
-            <h3 style="margin-top: 25px;">Recent History</h3>
-            <ul id="recentExpensesList">
-                <li class="placeholder">No expenses loaded...</li>
-            </ul>
         </div>
 
     </div>
 
-    <script src="script.js"></script>
+    <script>
+        const outputLog = document.getElementById('outputLog');
+        const dataDisplay = document.getElementById('dataDisplay');
+        const fetchButton = document.getElementById('fetchButton');
+
+        // 🚨 IMPORTANT: CHANGE THIS TO YOUR REAL API ENDPOINT 🚨
+        const API_ENDPOINT = "https://your-api-endpoint.com/api/getProjects"; 
+        
+        // Update the displayed URL
+        document.getElementById('displayUrl').textContent = API_ENDPOINT;
+
+
+        function log(message, type = 'info') {
+            const now = new Date().toLocaleTimeString();
+            let color = 'text-green-400';
+            if (type === 'error') color = 'text-red-400';
+            if (type === 'warn') color = 'text-yellow-400';
+            
+            outputLog.innerHTML += `<span class="${color}">[${now} - ${type.toUpperCase()}]</span> ${message}\n`;
+            outputLog.scrollTop = outputLog.scrollHeight; // Scroll to bottom
+        }
+
+        /**
+         * The crucial function with error handling for JSON parsing.
+         * This contains the fix for the reported 'Unexpected end of JSON input' error.
+         */
+        async function loadProjectsSafe() {
+            outputLog.innerHTML = '';
+            dataDisplay.textContent = 'Loading...';
+            
+            let response;
+            let rawText = '';
+
+            try {
+                log(`Starting fetch to: ${API_ENDPOINT}`, 'info');
+
+                // --- STEP 1: Perform the fetch ---
+                response = await fetch(API_ENDPOINT);
+
+                // --- STEP 2: Get the raw response body as text ---
+                rawText = await response.text();
+                log(`HTTP Status: ${response.status}`, 'info');
+
+                // Check for non-OK status codes (e.g., 404, 500)
+                if (!response.ok) {
+                    throw new Error(`HTTP Error! Status: ${response.status}. Raw content received: ${rawText.substring(0, 100)}...`);
+                }
+
+                // --- STEP 3: Attempt safe JSON parsing (The FIX) ---
+                let data;
+                try {
+                    // Check if the response is completely empty (the typical cause of "Unexpected end of JSON input")
+                    if (!rawText || rawText.trim().length === 0) {
+                        throw new SyntaxError("Response body is empty or whitespace only.");
+                    }
+                    
+                    data = JSON.parse(rawText);
+                    log("JSON parsing successful.", 'info');
+
+                } catch (e) {
+                    // Catch the JSON parsing error 
+                    log(`FATAL JSON PARSING ERROR! Details: ${e.message}`, 'error');
+                    
+                    // CRUCIAL: Log the raw, problematic response text for server debugging
+                    log(`Raw Response Text that caused the error:`, 'error');
+                    log(`---START RAW TEXT---\n${rawText}\n---END RAW TEXT---`, 'error');
+                    
+                    throw new Error("Data retrieval failed due to corrupted response format.");
+                }
+
+                // --- STEP 4: Process the successfully parsed data ---
+                // NOTE: Adjust 'data.title' and 'data.projectId' based on your actual API response structure
+                dataDisplay.textContent = `SUCCESS! Project Title: ${data.title} (ID: ${data.projectId})`;
+                log(`Successfully processed data. Title: ${data.title}`, 'info');
+
+
+            } catch (error) {
+                // --- STEP 5: Handle overall process errors (network or logical) ---
+                log(`An unexpected error occurred during the process: ${error.message}`, 'error');
+                dataDisplay.textContent = `ERROR: ${error.message}`;
+
+                if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+                    log("Network connection or CORS error. Check API server status.", 'error');
+                }
+            }
+        }
+
+        fetchButton.addEventListener('click', loadProjectsSafe);
+
+        // Initial setup log
+        log("Application loaded. Ready to fetch.", 'info');
+
+    </script>
 </body>
 </html>
