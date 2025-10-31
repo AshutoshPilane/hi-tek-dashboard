@@ -5,7 +5,7 @@
 
 // 🎯 CRITICAL: PASTE YOUR NEW VERIFIED APPS SCRIPT URL HERE!
 // !!! REPLACE THIS PLACEHOLDER AFTER PUBLISHING YOUR GOOGLE APPS SCRIPT !!!
-const SHEET_API_URL = "https://script.google.com/macros/s/AKfycbxPem8Y-rANmN6hc2tyuCd1O1lgUoCVwYHn4mV8K1-QwhVkWSCzjf_k7WQkCh8_gcEnMw/exec"; 
+const SHEET_API_URL = "https://script.google.com/macros/s/AKfycbxPem8Y-rANmN6hc2tyuCd1O1lgUoCVwYHn4mV8K1-QwhVkWSCzjf_k7WQkCh8_gcEnMw/s"; 
 
 let currentProjectID = null; 
 let allProjects = [];
@@ -52,103 +52,105 @@ function fetchDataFromSheet(action, projectID = '') {
     return postDataToSheet(payload, true); 
 }
 
+/**
+ * Main function to communicate with the Google Apps Script Web App.
+ * Uses a hidden iframe/form submission technique to bypass CORS restrictions.
+ * * @param {object} payload - The data to send to the Apps Script (includes 'action').
+ * @param {boolean} isGet - True if this is a Read action (expects JSON response).
+ * @returns {Promise<object|Array>} Resolves with data array for GET, or status object for POST.
+ */
 function postDataToSheet(payload, isGet = false) {
     return new Promise((resolve, reject) => {
-        if (SHEET_API_URL.includes("YOUR_APPS_SCRIPT_WEB_APP_URL_GOES_HERE")) {
-            alert("CRITICAL ERROR: Please set your published Apps Script URL.");
-            // Resolve with an empty array on error for GET to prevent filter error
-            return isGet ? resolve([]) : reject({ status: 'error', message: 'API URL not set.' }); 
-        }
-
-        const iframeName = 'submit_iframe_' + Date.now();
-        
-        // 1. Create temporary hidden iframe and form
-        const iframe = document.createElement('iframe');
-        iframe.name = iframeName;
-        iframe.style.display = 'none';
-        document.body.appendChild(iframe);
-
+        // 1. Create a dynamic form and iframe
         const form = document.createElement('form');
-        form.action = SHEET_API_URL;
-        form.method = 'POST'; // All requests use POST form submission
-        form.target = iframeName; 
+        form.action = APPS_SCRIPT_URL; // Use the URL with the /s endpoint
+        form.method = 'POST';
+        form.target = 'iframe_upload';
         form.style.display = 'none';
 
-        // 2. Populate form fields
+        const iframe = document.createElement('iframe');
+        iframe.name = 'iframe_upload';
+        iframe.style.display = 'none';
+
+        // 2. Append payload data as hidden fields
         for (const key in payload) {
-            if (payload.hasOwnProperty(key)) {
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = key;
-                // Stringify complex objects for Apps Script to parse
-                input.value = typeof payload[key] === 'object' && payload[key] !== null ? JSON.stringify(payload[key]) : payload[key];
-                form.appendChild(input);
-            }
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = key;
+            input.value = payload[key];
+            form.appendChild(input);
         }
+
+        document.body.appendChild(iframe);
         document.body.appendChild(form);
 
-        // Inside script.js, REPLACE the iframe.onload section in postDataToSheet:
-
-// 3. Handle response using iframe.onload
-iframe.onload = () => {
-    let responseText = '';
-    
-    try {
-        // CRITICAL FIX: The browser might throw an error trying to access 
-        // cross-domain content, or it might return null/undefined.
-        // We use a safe check and fallback to ensure responseText is a string.
-        let rawContent = '';
-        if (iframe.contentWindow && iframe.contentWindow.document.body) {
-            rawContent = iframe.contentWindow.document.body.textContent;
-        }
-        
-        // Ensure rawContent is treated as a string, even if it's null/undefined
-        responseText = String(rawContent || ''); 
-
-    } catch (e) {
-        // If the browser blocks reading iframe content due to CORS/security
-        // Assume failure for GET (empty data), success for POST ('success_callback')
-        responseText = isGet ? '' : 'success_callback'; 
-        console.warn("Iframe content access blocked/failed, using fallback response.", e);
-    }
-    
-    // Clean up
-    form.remove();
-    iframe.remove();
-
-    // Now responseText is guaranteed to be a string, so .trim() will not fail.
-    const trimmedResponse = responseText.trim(); 
-
-    if (isGet) {
-         // For GET/Read requests, we expect a JSON string response from the backend
-        try {
-            // Inside script.js, inside postDataToSheet, within the 'if (isGet)' block:
-// ...
-            const result = JSON.parse(trimmedResponse);
-            if (result.status === 'success') {
-                console.log("SUCCESSFUL GET RESPONSE DATA:", result.data); // <--- ADD THIS LINE
-                resolve(result.data || []);
-// ...
-            } else {
-                console.error(`API Error for ${payload.action}:`, result.message);
-                resolve([]); // Return empty array on error
+        // 3. Handle response using iframe.onload
+        iframe.onload = () => {
+            let responseText = '';
+            
+            try {
+                // With the /s URL, reading the content should now work.
+                responseText = iframe.contentWindow.document.body.textContent;
+            } catch (e) {
+                // This catch handles unexpected security errors, though rare with /s
+                console.warn("Iframe content reading failed unexpectedly. Using fallback.", e);
+                // Fallback: Use the expected success string for POST, or empty for GET
+                responseText = isGet ? '' : 'success_callback'; 
             }
-        } catch (e) {
-            console.error(`GET response parsing failed for ${payload.action}: Raw Response:`, trimmedResponse);
-            resolve([]); // Return empty array on error
-        }
-    } else {
-         // For POST/Write requests, we expect the simple 'success_callback' string
-        if (trimmedResponse && trimmedResponse.includes('success_callback')) {
-            resolve({ status: 'success', message: 'Operation successful' });
-        } else {
-            console.error('Server reported an error (via form submission): Raw Response:', trimmedResponse);
-            const message = trimmedResponse.replace('error_callback:', '').trim() || 'Operation failed. Check Apps Script logs.';
-            reject({ status: 'error', message: message });
-        }
-    }
-};
-// End of iframe.onload replacement
+            
+            // Cleanup
+            form.remove();
+            iframe.remove();
+
+            const trimmedResponse = String(responseText || '').trim();
+
+            if (isGet) {
+                // For GET/Read requests, we expect a JSON string response
+                try {
+                    const result = JSON.parse(trimmedResponse);
+                    
+                    if (result.status === 'success') {
+                        console.log("SUCCESSFUL GET RESPONSE DATA:", result.data);
+                        resolve(result.data || []); // Resolve with the data array
+                    } else {
+                        console.error(`API Error for ${payload.action}:`, result.message);
+                        resolve([]); // Resolve with empty array on server-side error
+                    }
+                } catch (e) {
+                    console.error(`GET response parsing failed for ${payload.action}: Raw Response:`, trimmedResponse, e);
+                    resolve([]); // Resolve with empty array on parsing error
+                }
+            } else {
+                // For POST/Write requests, we expect the simple 'success_callback' string
+                if (trimmedResponse.includes('success_callback')) {
+                    resolve({ status: 'success', message: 'Operation successful' });
+                } else {
+                    console.error('Server reported an error (via form submission): Raw Response:', trimmedResponse);
+                    const message = trimmedResponse.replace('error_callback:', '').trim() || 'Operation failed. Check Apps Script logs.';
+                    reject({ status: 'error', message: message });
+                }
+            }
+        };
+
+        // 4. Submit the form to trigger the Apps Script execution
+        form.submit();
+    });
+}
+
+
+/**
+ * Helper function to call postDataToSheet for GET actions.
+ * @param {string} action - The action string (e.g., 'getProjects').
+ * @param {string} [projectID] - Optional Project ID for filtering.
+ * @returns {Promise<Array>}
+ */
+function fetchDataFromSheet(action, projectID = '') {
+    const payload = {
+        action: action,
+        projectID: projectID
+    };
+    return postDataToSheet(payload, true);
+}
         // 4. Submit the form
         form.submit();
     });
@@ -697,6 +699,7 @@ document.getElementById('deleteProjectBtn').addEventListener('click', () => {
 
 
 document.addEventListener('DOMContentLoaded', loadProjects);
+
 
 
 
