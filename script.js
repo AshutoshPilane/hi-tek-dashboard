@@ -87,48 +87,64 @@ function postDataToSheet(payload, isGet = false) {
         }
         document.body.appendChild(form);
 
-        // 3. Handle response using iframe.onload
-        iframe.onload = () => {
-            let responseText = '';
-            
-            try {
-                // Read the simple text response from the iframe body
-                responseText = iframe.contentWindow.document.body.textContent;
-            } catch (e) {
-                // If the browser blocks reading iframe content, assume failure for GET, success for POST
-                responseText = isGet ? '' : 'success_callback'; 
-            }
-            
-            // Clean up
-            form.remove();
-            iframe.remove();
+        // Inside script.js, REPLACE the iframe.onload section in postDataToSheet:
 
-            if (isGet) {
-                 // For GET/Read requests, we expect a JSON string response from the backend
-                try {
-                    const result = JSON.parse(responseText.trim());
-                    if (result.status === 'success') {
-                        resolve(result.data || []);
-                    } else {
-                        console.error(`API Error for ${payload.action}:`, result.message);
-                        resolve([]); // Return empty array on error
-                    }
-                } catch (e) {
-                    console.error(`GET response parsing failed for ${payload.action}:`, responseText);
-                    resolve([]); // Return empty array on error
-                }
+// 3. Handle response using iframe.onload
+iframe.onload = () => {
+    let responseText = '';
+    
+    try {
+        // CRITICAL FIX: The browser might throw an error trying to access 
+        // cross-domain content, or it might return null/undefined.
+        // We use a safe check and fallback to ensure responseText is a string.
+        let rawContent = '';
+        if (iframe.contentWindow && iframe.contentWindow.document.body) {
+            rawContent = iframe.contentWindow.document.body.textContent;
+        }
+        
+        // Ensure rawContent is treated as a string, even if it's null/undefined
+        responseText = String(rawContent || ''); 
+
+    } catch (e) {
+        // If the browser blocks reading iframe content due to CORS/security
+        // Assume failure for GET (empty data), success for POST ('success_callback')
+        responseText = isGet ? '' : 'success_callback'; 
+        console.warn("Iframe content access blocked/failed, using fallback response.", e);
+    }
+    
+    // Clean up
+    form.remove();
+    iframe.remove();
+
+    // Now responseText is guaranteed to be a string, so .trim() will not fail.
+    const trimmedResponse = responseText.trim(); 
+
+    if (isGet) {
+         // For GET/Read requests, we expect a JSON string response from the backend
+        try {
+            const result = JSON.parse(trimmedResponse);
+            if (result.status === 'success') {
+                resolve(result.data || []);
             } else {
-                 // For POST/Write requests, we expect the simple 'success_callback' string
-                if (responseText && responseText.includes('success_callback')) {
-                    resolve({ status: 'success', message: 'Operation successful' });
-                } else {
-                    console.error('Server reported an error (via form submission):', responseText);
-                    const message = responseText.replace('error_callback:', '').trim() || 'Operation failed. Check Apps Script logs.';
-                    reject({ status: 'error', message: message });
-                }
+                console.error(`API Error for ${payload.action}:`, result.message);
+                resolve([]); // Return empty array on error
             }
-        };
-
+        } catch (e) {
+            console.error(`GET response parsing failed for ${payload.action}: Raw Response:`, trimmedResponse);
+            resolve([]); // Return empty array on error
+        }
+    } else {
+         // For POST/Write requests, we expect the simple 'success_callback' string
+        if (trimmedResponse && trimmedResponse.includes('success_callback')) {
+            resolve({ status: 'success', message: 'Operation successful' });
+        } else {
+            console.error('Server reported an error (via form submission): Raw Response:', trimmedResponse);
+            const message = trimmedResponse.replace('error_callback:', '').trim() || 'Operation failed. Check Apps Script logs.';
+            reject({ status: 'error', message: message });
+        }
+    }
+};
+// End of iframe.onload replacement
         // 4. Submit the form
         form.submit();
     });
@@ -677,6 +693,7 @@ document.getElementById('deleteProjectBtn').addEventListener('click', () => {
 
 
 document.addEventListener('DOMContentLoaded', loadProjects);
+
 
 
 
