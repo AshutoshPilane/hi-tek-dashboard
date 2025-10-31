@@ -5,7 +5,7 @@
 
 // 🎯 CRITICAL: This is the local proxy path handled by Netlify's _redirects file.
 // The Netlify configuration will secretly forward this request to the long Google URL.
-const SHEET_API_URL = "/api/exec"; 
+const SHEET_API_URL = "https://script.google.com/macros/s/AKfycbzwxLHSpJ9xQTKfc2wUQaIFzuUeWCxHqAXwueaf4jFXPdAYTTYPvQ_dJHzbZ9-MOkxQ/exec"; 
 
 let currentProjectID = null; 
 let allProjects = [];
@@ -552,3 +552,4 @@ document.getElementById('deleteProjectBtn').addEventListener('click', () => {
 
 
 document.addEventListener('DOMContentLoaded', loadProjects);
+
