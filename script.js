@@ -60,7 +60,7 @@ async function postDataToSheet(data) {
         // Use the relative path (e.g., /api/exec) which will be proxied by Netlify
         const response = await fetch(SHEET_API_URL, {
             method: 'POST',
-            mode: 'cors', // Crucial for cross-origin requests
+            // mode: 'cors' is removed as it's often unnecessary/problematic when using a proxy
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
         });
@@ -96,25 +96,27 @@ async function postDataToSheet(data) {
 }
 
 /**
- * Shows an alert box for errors.
- * @param {string} message The error message to display.
+ * Shows an alert/message box for errors or success.
+ * @param {string} message The message to display.
+ * @param {string} type 'error' or 'success'. Defaults to 'error'.
  */
-function displayError(message) {
-    // We are replacing alert() with a modal/message box in a real environment
-    // For this context, we will use the console to ensure we don't block the UI
-    console.error(`[APP ERROR] ${message}`);
-    // Optional: display a message in a prominent UI element if available
+function displayStatusMessage(message, type = 'error') {
+    console.log(`[APP MESSAGE (${type.toUpperCase()})] ${message}`);
     const msgElement = document.getElementById('statusMessage');
+    
     if (msgElement) {
         msgElement.textContent = message;
-        msgElement.classList.add('error');
+        msgElement.className = ''; // Reset classes
+        msgElement.classList.add('status-message', type);
+        
+        // Set a timeout to clear the message after 8 seconds
         setTimeout(() => {
             msgElement.textContent = '';
-            msgElement.classList.remove('error');
+            msgElement.classList.remove('error', 'success');
         }, 8000);
     } else {
-        // Fallback for demonstration environment
-        alert(message);
+        // Log to console if the element is missing (for environments without the UI)
+        console.warn(`[UI Warning] Could not find statusMessage element.`);
     }
 }
 
@@ -125,7 +127,8 @@ function displayError(message) {
  */
 async function loadProjects() {
     const selector = document.getElementById('projectSelector');
-    selector.innerHTML = '<option value="">Loading Projects...</option>'; // Show loading state
+    // Ensure we start with a clean message and loading indicator
+    selector.innerHTML = '<option value="">Loading Projects...</option>'; 
 
     try {
         // Send a request to fetch all project data (no projectID means all projects)
@@ -161,7 +164,8 @@ async function loadProjects() {
         await loadProjectDetails(currentProjectID);
 
     } catch (e) {
-        displayError(e.message);
+        // Use the non-blocking status message function
+        displayStatusMessage(e.message);
         selector.innerHTML = '<option value="">Connection Error</option>';
         document.getElementById('currentProjectName').textContent = 'Connection Error';
     }
@@ -216,7 +220,7 @@ async function loadProjectDetails(projectID) {
         await loadMaterials(projectID);
 
     } catch (e) {
-        displayError(e.message);
+        displayStatusMessage(e.message);
         clearDashboardData();
     }
 }
@@ -409,14 +413,21 @@ async function handleStatusChange(e) {
     const selector = e.target;
     const taskName = selector.dataset.taskName;
     const newStatus = selector.value;
-    const originalStatus = selector.options[selector.selectedIndex === 0 ? 2 : selector.selectedIndex - 1]?.value || 'Pending';
+    // For optimistic update reversion, we need the original status before the change.
+    // Finding the original status can be complex due to DOM manipulation; 
+    // we'll rely on the loadProjectDetails to fix any visual errors quickly.
+    const originalStatus = selector.options.find(opt => opt.defaultSelected)?.value || 'Pending';
     
     if (!currentProjectID || !taskName) return;
 
     try {
-        // Optimistic UI update (optional, but good practice)
-        selector.closest('.task-item').classList.remove(`status-${originalStatus.toLowerCase().replace(/\s/g, '-')}`);
-        selector.closest('.task-item').classList.add(`status-${newStatus.toLowerCase().replace(/\s/g, '-')}`);
+        // Optimistic UI update for immediate feedback
+        const taskItem = selector.closest('.task-item');
+        // Simple class removal/addition based on the new status
+        taskItem.classList.forEach(className => {
+             if (className.startsWith('status-')) taskItem.classList.remove(className);
+        });
+        taskItem.classList.add(`status-${newStatus.toLowerCase().replace(/\s/g, '-')}`);
         
         const payload = {
             action: 'updateTaskStatus',
@@ -431,10 +442,9 @@ async function handleStatusChange(e) {
         await loadProjectDetails(currentProjectID);
 
     } catch (e) {
-        displayError(`Failed to update task status: ${e.message}`);
-        // Revert UI on failure
+        displayStatusMessage(`Failed to update task status: ${e.message}`);
+        // Revert UI on failure (needs a better method, but this is the simplest revert)
         selector.value = originalStatus;
-        selector.closest('.task-item').classList.remove(`status-${newStatus.toLowerCase().replace(/\s/g, '-')}`);
         selector.closest('.task-item').classList.add(`status-${originalStatus.toLowerCase().replace(/\s/g, '-')}`);
     }
 }
@@ -443,7 +453,7 @@ document.getElementById('expenseEntryForm').addEventListener('submit', async (e)
     e.preventDefault();
 
     if (!currentProjectID) {
-        displayError('Please select a project before recording an expense.');
+        displayStatusMessage('Please select a project before recording an expense.');
         return;
     }
 
@@ -459,19 +469,22 @@ document.getElementById('expenseEntryForm').addEventListener('submit', async (e)
 
     try {
         await postDataToSheet(expenseData);
-        alert('Expense recorded successfully!');
+        
+        // Replace alert() with non-blocking message
+        displayStatusMessage('Expense recorded successfully!', 'success');
         form.reset();
         
         // Reload details to update KPIs and expense list
         await loadProjectDetails(currentProjectID);
         
     } catch (e) {
-        displayError(`Failed to record expense: ${e.message}`);
+        displayStatusMessage(`Failed to record expense: ${e.message}`);
     }
 });
 
 
 document.getElementById('addProjectBtn').addEventListener('click', async () => {
+    // NOTE: In a production app, the prompt() calls below would be replaced by a proper HTML modal form.
     const newName = prompt("Enter the New Project Name:");
     if (!newName) return;
 
@@ -479,7 +492,8 @@ document.getElementById('addProjectBtn').addEventListener('click', async () => {
     if (!newID) return;
     
     if (allProjects.some(p => String(p.ProjectID).trim() === String(newID).trim())) {
-        return alert('Project ID must be unique. This ID already exists.');
+        // Replace alert() with non-blocking message
+        return displayStatusMessage('Project ID must be unique. This ID already exists.');
     }
 
     const startDate = prompt("Enter Start Date (YYYY-MM-DD):");
@@ -489,7 +503,7 @@ document.getElementById('addProjectBtn').addEventListener('click', async () => {
     if (!deadline) return;
 
     const budget = prompt("Enter Project Budget (e.g., 500000):");
-    if (!budget || isNaN(parseFloat(budget))) return alert('Invalid budget entered.');
+    if (!budget || isNaN(parseFloat(budget))) return displayStatusMessage('Invalid budget entered.');
     
     const payload = {
         action: 'addNewProject',
@@ -509,25 +523,26 @@ document.getElementById('addProjectBtn').addEventListener('click', async () => {
     
     try {
         await postDataToSheet(payload);
-        alert(`Project "${newName}" added successfully with ID ${newID}. All 23 official tasks are now loaded to the sheet.`);
+        // Replace alert() with non-blocking message
+        displayStatusMessage(`Project "${newName}" added successfully with ID ${newID}. All 23 official tasks are now loaded to the sheet.`, 'success');
     } catch (e) {
-        displayError(`Failed to add project: ${e.message}`);
+        displayStatusMessage(`Failed to add project: ${e.message}`);
     }
     
     await loadProjects();
 });
 
 document.getElementById('deleteProjectBtn').addEventListener('click', () => {
-    if (!currentProjectID) return displayError('No project is selected.');
+    if (!currentProjectID) return displayStatusMessage('No project is selected.');
     const currentProject = allProjects.find(p => String(p.ProjectID).trim() === String(currentProjectID).trim());
     
-    // NOTE: Manual deletion is advised for comprehensive cleanup across multiple sheets.
-    const confirmDelete = confirm(`WARNING: Deleting Project "${currentProject.Name}" requires manual removal of all associated data rows (Tasks, Expenses, Materials) from all four tabs in the Google Sheet. Proceed to the Google Sheet?`);
+    // NOTE: Replaced confirm() and alert() with non-blocking UI/console message.
+    const deleteWarning = `WARNING: Deleting Project "${currentProject.Name}" requires manual removal of all associated data rows (Tasks, Expenses, Materials) from all four tabs in the Google Sheet.`;
     
-    if (confirmDelete) {
-        window.open('https://docs.google.com/spreadsheets/', '_blank');
-        alert("Please manually delete the project data row from ALL 4 tabs in your Google Sheet.");
-    }
+    displayStatusMessage(deleteWarning + " Please proceed to the Google Sheet to manually delete the rows.", 'error');
+    
+    // Provide a simple one-click to the sheet for convenience
+    window.open('https://docs.google.com/spreadsheets/', '_blank');
 });
 
 
