@@ -39,7 +39,7 @@ const HI_TEK_TASKS_MAP = [
 
 // ==============================================================================
 // 2. DATA UTILITIES (API FUNCTIONS) - COMPLETE CORS WORKAROUND VERSION
-// All requests are now sent via a CORS-exempt form submission (POST) to solve the final issue.
+// All data traffic uses the CORS-exempt form submission method.
 // ==============================================================================
 
 function fetchDataFromSheet(action, projectID = '') {
@@ -48,8 +48,7 @@ function fetchDataFromSheet(action, projectID = '') {
     if (projectID) {
         payload.projectID = projectID;
     }
-    // Flag 'true' means this is a GET request (expecting parsed data back)
-    // The loadProjects function (line 182) will call this.
+    // Flag 'true' means this is a GET/Read request (expecting parsed JSON data back)
     return postDataToSheet(payload, true); 
 }
 
@@ -57,7 +56,7 @@ function postDataToSheet(payload, isGet = false) {
     return new Promise((resolve, reject) => {
         if (SHEET_API_URL.includes("YOUR_APPS_SCRIPT_WEB_APP_URL_GOES_HERE")) {
             alert("CRITICAL ERROR: Please set your published Apps Script URL.");
-            // Resolve with an empty array to prevent the allProjects.filter error
+            // Resolve with an empty array on error for GET to prevent filter error
             return isGet ? resolve([]) : reject({ status: 'error', message: 'API URL not set.' }); 
         }
 
@@ -112,13 +111,11 @@ function postDataToSheet(payload, isGet = false) {
                         resolve(result.data || []);
                     } else {
                         console.error(`API Error for ${payload.action}:`, result.message);
-                        // Return empty array on error to prevent filter is not a function error
-                        resolve([]); 
+                        resolve([]); // Return empty array on error
                     }
                 } catch (e) {
                     console.error(`GET response parsing failed for ${payload.action}:`, responseText);
-                    // Return empty array on error
-                    resolve([]); 
+                    resolve([]); // Return empty array on error
                 }
             } else {
                  // For POST/Write requests, we expect the simple 'success_callback' string
@@ -720,6 +717,7 @@ document.getElementById('deleteProjectBtn').addEventListener('click', () => {
 
 
 document.addEventListener('DOMContentLoaded', loadProjects);
+
 
 
 
