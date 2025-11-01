@@ -133,10 +133,10 @@ const loadProjects = async () => {
     projectSelector.innerHTML = '<option value="">-- Select Project --</option>';
     currentProjectID = null;
     allProjects = [];
-    currentProjectNameElement.textContent = 'Select a Project';
     
-    // Clear dashboard display areas
+    // Clear dashboard display areas AND reset the project name display
     clearDashboard();
+    currentProjectNameElement.textContent = 'Select a Project';
 
     try {
         const projectsData = await fetchDataFromSheet('Projects');
@@ -166,23 +166,45 @@ const loadProjects = async () => {
     }
 };
 
+/**
+ * Clears the content of all dynamic dashboard elements.
+ * Includes safety checks to prevent 'Cannot set properties of null' errors.
+ */
 const clearDashboard = () => {
-    // Clear all KPI data
-    document.getElementById('kpi-days-spent').textContent = 'N/A';
-    document.getElementById('kpi-days-left').textContent = 'N/A';
-    document.getElementById('kpi-cost-vs-budget').textContent = 'N/A';
-    document.getElementById('kpi-status').textContent = 'N/A';
-    document.getElementById('kpi-budget').textContent = 'N/A';
-    document.getElementById('kpi-spent').textContent = 'N/A';
-    document.getElementById('kpi-remaining').textContent = 'N/A';
+    const idsToClear = [
+        'kpi-days-spent', 'kpi-days-left', 'kpi-cost-vs-budget', 'kpi-status', 
+        'kpi-budget', 'kpi-spent', 'kpi-remaining', 
+        'project-start-date', 'project-deadline', 'project-contractor', 
+        'project-engineers', 'project-contact1', 'project-contact2'
+    ];
 
-    // Clear detail data
-    document.getElementById('project-start-date').textContent = 'N/A';
-    document.getElementById('project-deadline').textContent = 'N/A';
-    document.getElementById('project-contractor').textContent = 'N/A';
-    document.getElementById('project-engineers').textContent = 'N/A';
-    document.getElementById('project-contact1').textContent = 'N/A';
-    document.getElementById('project-contact2').textContent = 'N/A';
+    // Clear all text content and set to 'N/A'
+    idsToClear.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            // Special handling for the progress bar container to reset its HTML
+            if (id === 'kpi-cost-vs-budget') {
+                 element.innerHTML = `
+                    <div class="progress-bar-container"><div class="progress-bar" style="width: 0%;"></div></div>
+                    N/A
+                `;
+            } else {
+                element.textContent = 'N/A';
+            }
+        } else {
+            // Log missing element for debugging, but prevent crash (This was the fix)
+            console.warn(`Missing required dashboard element: #${id}. Check index.html consistency.`);
+        }
+    });
+    
+    // Reset status box color
+    const kpiStatusBox = document.getElementById('kpi-status')?.parentElement;
+    if (kpiStatusBox) kpiStatusBox.style.backgroundColor = 'var(--color-accent)';
+    
+    // Reset days left box color
+    const kpiDaysLeftBox = document.getElementById('kpi-days-left')?.parentElement;
+    if (kpiDaysLeftBox) kpiDaysLeftBox.style.backgroundColor = 'var(--color-primary)';
+
 
     // Clear task and expense lists
     document.getElementById('taskList').innerHTML = '<li class="placeholder">Select a project to view tasks...</li>';
@@ -248,30 +270,31 @@ const updateDashboard = (project) => {
     };
 
     let daysSpent = 'N/A';
-    let daysLeft = 'N/A';
-
-    if (startDate) {
+    
+    // Update Days Spent KPI
+    const kpiDaysSpentElement = document.getElementById('kpi-days-spent');
+    if (startDate && kpiDaysSpentElement) {
         daysSpent = diffInDays(startDate, today) - 1; // -1 to not count today as a full day spent
-        document.getElementById('kpi-days-spent').textContent = `${daysSpent > 0 ? daysSpent : 0} days`;
+        kpiDaysSpentElement.textContent = `${daysSpent > 0 ? daysSpent : 0} days`;
     }
 
-    if (deadline) {
+    // Update Days Left KPI
+    const kpiDaysLeftElement = document.getElementById('kpi-days-left');
+    const kpiDaysLeftBox = kpiDaysLeftElement ? kpiDaysLeftElement.parentElement : null;
+
+    if (deadline && kpiDaysLeftElement && kpiDaysLeftBox) {
         const daysToDeadline = diffInDays(today, deadline) - 1; // -1 to not count today as a full day remaining
-        if (today < deadline) {
+        if (today <= deadline) {
             daysLeft = daysToDeadline > 0 ? daysToDeadline : 0;
-            document.getElementById('kpi-days-left').textContent = `${daysLeft} days`;
+            kpiDaysLeftElement.textContent = `${daysLeft} days`;
+            kpiDaysLeftBox.style.backgroundColor = 'var(--color-primary)';
         } else {
-            daysLeft = daysToDeadline * -1;
-            document.getElementById('kpi-days-left').textContent = `${daysLeft} days (OVERDUE)`;
-            document.getElementById('kpi-days-left').parentElement.style.backgroundColor = 'var(--color-critical)';
+            daysLeft = diffInDays(deadline, today); // Calculate actual overdue days
+            kpiDaysLeftElement.textContent = `${daysLeft} days (OVERDUE)`;
+            kpiDaysLeftBox.style.backgroundColor = 'var(--color-critical)';
         }
-    } else {
-        document.getElementById('kpi-days-left').textContent = 'No Deadline';
-    }
-
-    // Reset color
-    if (!deadline || today < deadline) {
-        document.getElementById('kpi-days-left').parentElement.style.backgroundColor = 'var(--color-primary)';
+    } else if (kpiDaysLeftElement) {
+         kpiDaysLeftElement.textContent = 'No Deadline';
     }
 
     // The remaining financial KPIs are updated after expenses are loaded in loadExpenses
@@ -319,14 +342,20 @@ const loadTasks = async (projectID) => {
         // Update Project Status KPI
         const totalTasks = projectTasks.length;
         const completionPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-        document.getElementById('kpi-status').textContent = `${completionPercentage}% Completed (${completedTasks}/${totalTasks})`;
+        const kpiStatusElement = document.getElementById('kpi-status');
+        if (kpiStatusElement) {
+            kpiStatusElement.textContent = `${completionPercentage}% Completed (${completedTasks}/${totalTasks})`;
 
-        // Set status box color based on percentage
-        const kpiStatusBox = document.getElementById('kpi-status').parentElement;
-        kpiStatusBox.style.backgroundColor = 
-            completionPercentage === 100 ? 'var(--color-success)' :
-            completionPercentage > 50 ? 'var(--color-warning)' :
-            'var(--color-accent)';
+            // Set status box color based on percentage
+            const kpiStatusBox = kpiStatusElement.parentElement;
+            if (kpiStatusBox) {
+                kpiStatusBox.style.backgroundColor = 
+                    completionPercentage === 100 ? 'var(--color-success)' :
+                    completionPercentage > 50 ? 'var(--color-warning)' :
+                    'var(--color-accent)';
+            }
+        }
+
 
     } catch (error) {
         console.error("Error loading tasks:", error);
@@ -382,13 +411,16 @@ const loadExpenses = async (projectID) => {
         const costVsBudgetElement = document.getElementById('kpi-cost-vs-budget');
         const spentPercentage = budget > 0 ? Math.round((totalSpent / budget) * 100) : (totalSpent > 0 ? 1000 : 0);
         
-        costVsBudgetElement.innerHTML = `
-            <div class="progress-bar-container">
-                <div class="progress-bar" style="width: ${Math.min(spentPercentage, 100)}%; background-color: ${spentPercentage > 100 ? 'var(--color-critical)' : 'var(--color-success)'}"></div>
-            </div>
-            ${spentPercentage}% of Budget Spent
-        `;
-        costVsBudgetElement.style.color = spentPercentage > 100 ? 'var(--color-critical)' : 'var(--color-text)';
+        if (costVsBudgetElement) {
+            costVsBudgetElement.innerHTML = `
+                <div class="progress-bar-container">
+                    <div class="progress-bar" style="width: ${Math.min(spentPercentage, 100)}%; background-color: ${spentPercentage > 100 ? 'var(--color-critical)' : 'var(--color-success)'}"></div>
+                </div>
+                ${spentPercentage}% of Budget Spent
+            `;
+            costVsBudgetElement.style.color = spentPercentage > 100 ? 'var(--color-critical)' : 'var(--color-text)';
+        }
+
 
     } catch (error) {
         console.error("Error loading expenses:", error);
