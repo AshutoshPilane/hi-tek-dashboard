@@ -18,87 +18,71 @@
         </div>
     </header>
 
-    <div class="panel" style="margin-bottom: 20px;">
-        <h2>Key Performance Indicators (KPIs)</h2>
-        <div class="kpi-container">
-            <div class="kpi-box">
-                <div class="label">Days Spent</div>
-                <div class="value" id="kpi-days-spent">N/A</div>
-            </div>
-            <div class="kpi-box">
-                <div class="label">Days Remaining (Deadline)</div>
-                <div class="value" id="kpi-days-left">N/A</div>
-            </div>
-            <div class="kpi-box kpi-full-width">
-                <div class="label">Progress</div>
-                <div class="progress-bar-container">
-                    <div class="progress-bar" id="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+    <div class="dashboard-grid">
+        
+        <!-- Left Column: KPIs and Details -->
+        <div class="panel">
+            <h2>Key Performance Indicators (KPIs)</h2>
+            <div class="kpi-container">
+                
+                <!-- Time KPIs -->
+                <div class="kpi-box">
+                    <div class="label">Days Spent</div>
+                    <div class="value" id="kpi-days-spent">N/A</div>
                 </div>
-                <div class="value" id="kpi-completion">0.0%</div>
+                <div class="kpi-box">
+                    <div class="label">Days Remaining (Deadline)</div>
+                    <div class="value" id="kpi-days-left">N/A</div>
+                </div>
+
+                <!-- Status KPI -->
+                <div class="kpi-box kpi-full-width" style="background-color: var(--color-accent);">
+                    <div class="label">Project Status</div>
+                    <div class="value" id="kpi-status">N/A</div>
+                </div>
+                
+                <!-- Budget KPIs -->
+                <div class="kpi-details-section kpi-full-width">
+                    <div class="kpi-detail-box">Budget: <span id="kpi-budget">N/A</span></div>
+                    <div class="kpi-detail-box">Spent: <span id="kpi-spent">N/A</span></div>
+                    <div class="kpi-detail-box">Remaining: <span id="kpi-remaining">N/A</span></div>
+                </div>
+
+                <!-- Cost vs Budget Progress -->
+                <div class="kpi-full-width kpi-box" id="kpi-cost-vs-budget">
+                    <div class="progress-bar-container"><div class="progress-bar" style="width: 0%;"></div></div>
+                    0% of Budget Spent
+                </div>
+
             </div>
-            <div class="kpi-box">
-                <div class="label">Total Budget</div>
-                <div class="value" id="kpi-budget">₹0</div>
-            </div>
-            <div class="kpi-box">
-                <div class="label">Total Expenses</div>
-                <div class="value" id="kpi-expenses">₹0</div>
-            </div>
-            <div class="kpi-box">
-                <div class="label">Remaining Budget</div>
-                <div class="value" id="kpi-remaining-budget">₹0</div>
+
+            <!-- Project Details Section -->
+            <h2 style="margin-top: 25px;">Project Details</h2>
+            <div class="project-details">
+                <p><strong>Start Date:</strong> <span id="project-start-date">N/A</span></p>
+                <p><strong>Deadline:</strong> <span id="project-deadline">N/A</span></p>
+                <p><strong>Contractor:</strong> <span id="project-contractor">N/A</span></p>
+                <p><strong>Engineers:</strong> <span id="project-engineers">N/A</span></p>
+                <p><strong>Contact 1:</strong> <span id="project-contact1">N/A</span></p>
+                <p><strong>Contact 2:</strong> <span id="project-contact2">N/A</span></p>
             </div>
         </div>
-    </div>
 
-    <!-- Main Dashboard Grid -->
-    <div class="dashboard-grid hidden">
-        
-        <!-- Panel 1: Tasks -->
+        <!-- Middle Column: Tasks and Materials -->
         <div class="panel">
-            <h2>Workflow & Tasks</h2>
+            <h2>Workflow Tasks (23 Steps)</h2>
             <ul id="taskList">
                 <li class="placeholder">Select a project to view tasks...</li>
             </ul>
-        </div>
 
-        <!-- Panel 2: Materials & Procurement -->
-        <div class="panel">
-            <h2>Materials & Procurement</h2>
-            
-            <!-- NEW: Material Entry Form added here -->
-            <div class="form-section">
-                <h3>Record New Material Order</h3>
-                <form id="materialEntryForm">
-                    <label for="materialName">Material Name:</label>
-                    <input type="text" id="materialName" required>
-                    
-                    <label for="materialQuantity">Quantity:</label>
-                    <input type="number" id="materialQuantity" min="1" required>
-
-                    <label for="materialUnit">Unit:</label>
-                    <input type="text" id="materialUnit" required placeholder="e.g., Kg, pcs, m²">
-
-                    <label for="materialSupplier">Supplier:</label>
-                    <input type="text" id="materialSupplier" required>
-                    
-                    <label for="materialOrderDate">Order Date:</label>
-                    <input type="date" id="materialOrderDate" required>
-
-                    <button type="submit" class="button-primary">Record Material Order</button>
-                </form>
-            </div>
-            
-            <h3 style="margin-top: 25px;">Recent Orders</h3>
-            <ul id="materialList">
-                <li class="placeholder">No materials loaded...</li>
+            <h2 style="margin-top: 25px;">Materials Ordered</h2>
+            <ul id="materialsList">
+                <li class="placeholder">Select a project to view materials...</li>
             </ul>
         </div>
 
-        <!-- Panel 3: Expense Tracking -->
+        <!-- Right Column: Expenses -->
         <div class="panel">
-            <h2>Expense Tracking</h2>
-            
             <div class="form-section">
                 <h3>Record New Expense</h3>
                 <form id="expenseEntryForm">
