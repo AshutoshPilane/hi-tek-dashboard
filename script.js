@@ -1,11 +1,11 @@
 // ==============================================================================
-// script.js: ONLINE VERSION (Google Sheet API Integration)
-// Data is fetched from and sent to the live Google Sheet via a Web App.
+// script.js: ONLINE VERSION (SheetDB API Integration)
+// Data is fetched from and sent to the live Google Sheet via SheetDB.
 // ==============================================================================
 
-// 🎯 CRITICAL: PASTE YOUR NEW VERIFIED APPS SCRIPT URL HERE!
-// !!! REPLACE THIS PLACEHOLDER AFTER PUBLISHING YOUR GOOGLE APPS SCRIPT !!!
-const SHEET_API_URL = "https://script.google.com/macros/s/AKfycbzxcMcx2Fm7ZW8lWX_1hxYemFP8n35XPbEIswQUm-V2xH4AraXGcdB2TH077BU4aIHVNA/exec"; 
+// 🎯 CRITICAL: PASTE YOUR SHEETDB API URL HERE!
+// Note: This URL does not use the /api/ path or Netlify redirect, as SheetDB handles CORS.
+const SHEET_API_URL = "https://sheetdb.io/api/v1/3uaqqfnplzz5m"; 
 
 let currentProjectID = null; 
 let allProjects = [];
@@ -37,7 +37,7 @@ const HI_TEK_TASKS_MAP = [
     { Name: '23. Feedback Collection', Responsible: 'Project Manager' }
 ];
 
-// --- 2. API UTILITY FUNCTIONS (Corrected for Apps Script URL structure) ---
+// --- 2. API UTILITY FUNCTIONS (UPDATED FOR SHEETDB) ---
 
 /**
  * Fetches data from a specified sheet (GET request).
@@ -45,31 +45,25 @@ const HI_TEK_TASKS_MAP = [
  * @returns {Promise<Array<Object>>} The data rows from the sheet.
  */
 const fetchDataFromSheet = async (sheetName) => {
-    // CORRECTED URL: Uses the single API endpoint with a 'sheet' query parameter.
+    // SheetDB URL for GET requests to a specific sheet:
+    // https://sheetdb.io/api/v1/YOUR_API_ID?sheet=SheetName
     const url = `${SHEET_API_URL}?sheet=${sheetName}`;
     try {
         const response = await fetch(url);
         
-        // The Apps Script web app returns a 200 even for errors, 
-        // but if the response is not ok (e.g., 404, which should now be fixed), we throw.
         if (!response.ok) {
             throw new Error(`HTTP error! Status: ${response.status}`);
         }
         
         const data = await response.json();
         
-        // Apps Script may return a JSON object with an 'error' property on failure
-        if (data.error) {
-            throw new Error(`Apps Script Error: ${data.error}`);
-        }
-
-        return data; // Should be the array of data
+        // SheetDB returns a simple array of objects for a successful GET.
+        return data;
     } catch (error) {
         console.error(`Fetch Error: ${error.message} on ${sheetName}`, error);
-        // Display a user-friendly error message
         const listElement = document.getElementById('recentExpensesList') || document.getElementById('taskList');
         if (listElement) {
-            listElement.innerHTML = `<li class="placeholder-error">Critical API Connection Error to Google Sheet Web App: ${error.message} on ${sheetName}. Please ensure your Apps Script is deployed correctly.</li>`;
+            listElement.innerHTML = `<li class="placeholder-error">Critical API Connection Error to SheetDB: ${error.message} on ${sheetName}. Please check your SheetDB setup and API URL.</li>`;
         }
         return [];
     }
@@ -78,43 +72,39 @@ const fetchDataFromSheet = async (sheetName) => {
 /**
  * Sends data to a specified sheet (POST request).
  * @param {string} sheetName The name of the Google Sheet tab.
- * @param {Object} payload The data object to send.
+ * @param {Array<Object>} payload The data array to send. SheetDB expects the data to be wrapped in a 'data' object.
  * @returns {Promise<Object>} The server response.
  */
 const postDataToSheet = async (sheetName, payload) => {
-    // CORRECTED URL: Uses the single API endpoint with a 'sheet' query parameter.
+    // SheetDB URL for POST requests to a specific sheet:
+    // https://sheetdb.io/api/v1/YOUR_API_ID?sheet=SheetName
     const url = `${SHEET_API_URL}?sheet=${sheetName}`;
 
     try {
         const response = await fetch(url, {
             method: 'POST',
-            mode: 'cors', // Ensure CORS is enabled
+            // SheetDB typically handles CORS automatically
             headers: {
                 'Content-Type': 'application/json',
             },
-            // The data is passed directly in the body as JSON.
-            body: JSON.stringify(payload)
+            // SheetDB POST data must be wrapped in a 'data' object
+            body: JSON.stringify({ data: payload })
         });
 
-        const textResponse = await response.text();
+        const result = await response.json();
         
-        if (!response.ok) {
-            // Include response text in error for better debugging
-            throw new Error(`API Request Failed (${response.status}): ${textResponse}`);
+        // Check for specific SheetDB error messages in the response body
+        if (!response.ok || result.error) {
+             // Use the returned JSON or HTTP status for error message
+            const errorMessage = result.error ? result.error : `HTTP Status: ${response.status}`;
+            throw new Error(`SheetDB POST Failed: ${errorMessage}`);
         }
 
-        // Attempt to parse JSON; some Apps Script success responses might be plain text.
-        try {
-            return JSON.parse(textResponse);
-        } catch (e) {
-            // If it's not JSON, return a success object with the raw text
-            return { status: 'success', message: textResponse };
-        }
+        // SheetDB usually returns { "created": <number> } on success
+        return { status: 'success', message: `Rows created: ${result.created || '1'}` };
 
     } catch (error) {
         console.error('Post Error:', error);
-        // Display a user-friendly error message to the user
-        // This is important for the New Project/Add Expense buttons
         return { status: 'error', message: error.message };
     }
 };
@@ -141,7 +131,8 @@ const loadProjects = async () => {
     try {
         const projectsData = await fetchDataFromSheet('Projects');
         if (projectsData && projectsData.length > 0) {
-            allProjects = projectsData.filter(p => p.ProjectID); // Filter out rows without ID
+            // SheetDB returns all columns, assuming 'ProjectID' is one of them.
+            allProjects = projectsData.filter(p => p.ProjectID); 
 
             allProjects.forEach(project => {
                 const option = document.createElement('option');
@@ -157,7 +148,6 @@ const loadProjects = async () => {
                 handleProjectSelection(firstProjectId);
             }
         } else {
-            // Display a message if no projects are found but the API call succeeded
             currentProjectNameElement.textContent = 'No Projects Found';
         }
     } catch (error) {
@@ -168,7 +158,6 @@ const loadProjects = async () => {
 
 /**
  * Clears the content of all dynamic dashboard elements.
- * Includes safety checks to prevent 'Cannot set properties of null' errors.
  */
 const clearDashboard = () => {
     const idsToClear = [
@@ -178,11 +167,9 @@ const clearDashboard = () => {
         'project-engineers', 'project-contact1', 'project-contact2'
     ];
 
-    // Clear all text content and set to 'N/A'
     idsToClear.forEach(id => {
         const element = document.getElementById(id);
         if (element) {
-            // Special handling for the progress bar container to reset its HTML
             if (id === 'kpi-cost-vs-budget') {
                  element.innerHTML = `
                     <div class="progress-bar-container"><div class="progress-bar" style="width: 0%;"></div></div>
@@ -192,21 +179,17 @@ const clearDashboard = () => {
                 element.textContent = 'N/A';
             }
         } else {
-            // Log missing element for debugging, but prevent crash (This was the fix)
             console.warn(`Missing required dashboard element: #${id}. Check index.html consistency.`);
         }
     });
     
-    // Reset status box color
     const kpiStatusBox = document.getElementById('kpi-status')?.parentElement;
     if (kpiStatusBox) kpiStatusBox.style.backgroundColor = 'var(--color-accent)';
     
-    // Reset days left box color
     const kpiDaysLeftBox = document.getElementById('kpi-days-left')?.parentElement;
     if (kpiDaysLeftBox) kpiDaysLeftBox.style.backgroundColor = 'var(--color-primary)';
 
 
-    // Clear task and expense lists
     document.getElementById('taskList').innerHTML = '<li class="placeholder">Select a project to view tasks...</li>';
     document.getElementById('recentExpensesList').innerHTML = '<li class="placeholder">Select a project to view expenses...</li>';
     document.getElementById('materialsList').innerHTML = '<li class="placeholder">Select a project to view materials...</li>';
@@ -221,13 +204,14 @@ const handleProjectSelection = (projectID) => {
         return;
     }
 
-    // Find the selected project object
     const selectedProject = allProjects.find(p => String(p.ProjectID).trim() === String(projectID).trim());
 
     if (selectedProject) {
         currentProjectNameElement.textContent = selectedProject.Name;
         updateDashboard(selectedProject);
         // Load data specific to this project
+        // Note: SheetDB filtering is done client-side here for simplicity,
+        // but SheetDB supports search query parameters for server-side filtering.
         loadTasks(projectID);
         loadExpenses(projectID);
         loadMaterials(projectID);
@@ -261,7 +245,7 @@ const updateDashboard = (project) => {
     const startDate = project.StartDate ? new Date(project.StartDate) : null;
     const deadline = project.Deadline ? new Date(project.Deadline) : null;
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Normalize today's date
+    today.setHours(0, 0, 0, 0); 
 
     const diffInDays = (date1, date2) => {
         if (!date1 || !date2) return NaN;
@@ -271,25 +255,23 @@ const updateDashboard = (project) => {
 
     let daysSpent = 'N/A';
     
-    // Update Days Spent KPI
     const kpiDaysSpentElement = document.getElementById('kpi-days-spent');
     if (startDate && kpiDaysSpentElement) {
-        daysSpent = diffInDays(startDate, today) - 1; // -1 to not count today as a full day spent
+        daysSpent = diffInDays(startDate, today) - 1; 
         kpiDaysSpentElement.textContent = `${daysSpent > 0 ? daysSpent : 0} days`;
     }
 
-    // Update Days Left KPI
     const kpiDaysLeftElement = document.getElementById('kpi-days-left');
     const kpiDaysLeftBox = kpiDaysLeftElement ? kpiDaysLeftElement.parentElement : null;
 
     if (deadline && kpiDaysLeftElement && kpiDaysLeftBox) {
-        const daysToDeadline = diffInDays(today, deadline) - 1; // -1 to not count today as a full day remaining
+        const daysToDeadline = diffInDays(today, deadline) - 1; 
         if (today <= deadline) {
             daysLeft = daysToDeadline > 0 ? daysToDeadline : 0;
             kpiDaysLeftElement.textContent = `${daysLeft} days`;
             kpiDaysLeftBox.style.backgroundColor = 'var(--color-primary)';
         } else {
-            daysLeft = diffInDays(deadline, today); // Calculate actual overdue days
+            daysLeft = diffInDays(deadline, today); 
             kpiDaysLeftElement.textContent = `${daysLeft} days (OVERDUE)`;
             kpiDaysLeftBox.style.backgroundColor = 'var(--color-critical)';
         }
@@ -307,9 +289,19 @@ const loadTasks = async (projectID) => {
     taskList.innerHTML = '<li class="placeholder">Loading tasks...</li>';
     
     try {
-        const allTasks = await fetchDataFromSheet('Tasks');
-        const projectTasks = allTasks.filter(t => String(t.ProjectID).trim() === String(projectID).trim());
+        // Use SheetDB search feature for server-side filtering (more efficient)
+        const url = `${SHEET_API_URL}/search?ProjectID=${projectID}&sheet=Tasks`;
         
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+        const projectTasks = await response.json();
+        
+        // Ensure data is an array
+        if (!Array.isArray(projectTasks)) {
+            taskList.innerHTML = '<li class="placeholder-error">Failed to parse task data from SheetDB.</li>';
+            return;
+        }
+
         taskList.innerHTML = ''; // Clear loading message
 
         if (projectTasks.length === 0) {
@@ -346,7 +338,6 @@ const loadTasks = async (projectID) => {
         if (kpiStatusElement) {
             kpiStatusElement.textContent = `${completionPercentage}% Completed (${completedTasks}/${totalTasks})`;
 
-            // Set status box color based on percentage
             const kpiStatusBox = kpiStatusElement.parentElement;
             if (kpiStatusBox) {
                 kpiStatusBox.style.backgroundColor = 
@@ -359,7 +350,7 @@ const loadTasks = async (projectID) => {
 
     } catch (error) {
         console.error("Error loading tasks:", error);
-        taskList.innerHTML = '<li class="placeholder-error">Failed to load tasks.</li>';
+        taskList.innerHTML = `<li class="placeholder-error">Failed to load tasks: ${error.message}</li>`;
         document.getElementById('kpi-status').textContent = 'Error';
     }
 };
@@ -374,9 +365,18 @@ const loadExpenses = async (projectID) => {
     totalSpent = 0;
     
     try {
-        const allExpenses = await fetchDataFromSheet('Expenses');
-        const projectExpenses = allExpenses.filter(e => String(e.ProjectID).trim() === String(projectID).trim());
+        // Use SheetDB search feature for server-side filtering (more efficient)
+        const url = `${SHEET_API_URL}/search?ProjectID=${projectID}&sheet=Expenses`;
         
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+        const projectExpenses = await response.json();
+        
+        if (!Array.isArray(projectExpenses)) {
+            expensesList.innerHTML = '<li class="placeholder-error">Failed to parse expense data from SheetDB.</li>';
+            return;
+        }
+
         expensesList.innerHTML = ''; // Clear loading message
 
         if (projectExpenses.length === 0) {
@@ -424,7 +424,7 @@ const loadExpenses = async (projectID) => {
 
     } catch (error) {
         console.error("Error loading expenses:", error);
-        expensesList.innerHTML = '<li class="placeholder-error">Failed to load expenses.</li>';
+        expensesList.innerHTML = `<li class="placeholder-error">Failed to load expenses: ${error.message}</li>`;
     }
 };
 
@@ -432,7 +432,6 @@ document.getElementById('expenseEntryForm').addEventListener('submit', async (e)
     e.preventDefault();
 
     if (!currentProjectID) {
-        // Use a more user-friendly modal or message box instead of alert()
         console.warn('Cannot record expense: No project is selected.');
         alert('Please select a project before recording an expense.');
         return;
@@ -444,7 +443,6 @@ document.getElementById('expenseEntryForm').addEventListener('submit', async (e)
     const expenseAmount = form.elements['expenseAmount'].value;
     const expenseCategory = form.elements['expenseCategory'].value;
     
-    // NOTE: Hardcoded user for this single-user application
     const recordedBy = 'User Admin'; 
 
     const payload = {
@@ -456,8 +454,7 @@ document.getElementById('expenseEntryForm').addEventListener('submit', async (e)
         RecordedBy: recordedBy
     };
     
-    // The Apps Script expects an array of objects for bulk operations, 
-    // even for a single record.
+    // SheetDB POST requires an array of objects to be sent
     const result = await postDataToSheet('Expenses', [payload]);
 
     if (result.status === 'success') {
@@ -478,8 +475,17 @@ const loadMaterials = async (projectID) => {
     materialsList.innerHTML = '<li class="placeholder">Loading materials...</li>';
     
     try {
-        const allMaterials = await fetchDataFromSheet('Materials');
-        const projectMaterials = allMaterials.filter(m => String(m.ProjectID).trim() === String(projectID).trim());
+        // Use SheetDB search feature for server-side filtering (more efficient)
+        const url = `${SHEET_API_URL}/search?ProjectID=${projectID}&sheet=Materials`;
+        
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+        const projectMaterials = await response.json();
+        
+        if (!Array.isArray(projectMaterials)) {
+            materialsList.innerHTML = '<li class="placeholder-error">Failed to parse material data from SheetDB.</li>';
+            return;
+        }
         
         materialsList.innerHTML = ''; // Clear loading message
 
@@ -502,7 +508,7 @@ const loadMaterials = async (projectID) => {
 
     } catch (error) {
         console.error("Error loading materials:", error);
-        materialsList.innerHTML = '<li class="placeholder-error">Failed to load materials.</li>';
+        materialsList.innerHTML = `<li class="placeholder-error">Failed to load materials: ${error.message}</li>`;
     }
 };
 
@@ -536,7 +542,7 @@ document.getElementById('addProjectBtn').addEventListener('click', async () => {
         ProjectID: newID,
         Name: newName.trim(),
         StartDate: today,
-        Deadline: '', // To be filled in later
+        Deadline: '', 
         Budget: 0, 
         CreationDate: today,
         Contractor: '',
@@ -545,12 +551,11 @@ document.getElementById('addProjectBtn').addEventListener('click', async () => {
         Contact2: ''
     };
 
-    // The Apps Script expects an array of objects for bulk operations, 
-    // even for a single record.
+    // SheetDB POST requires an array of objects to be sent
     const projectResult = await postDataToSheet('Projects', [payload]);
     
     // Now prepare the 23-task template for the 'Tasks' sheet
-    // The Apps Script expects an array of objects
+    // SheetDB POST requires an array of objects to be sent
     const tasksPayload = HI_TEK_TASKS_MAP.map(task => ({
         ProjectID: newID,
         TaskName: task.Name,
@@ -565,7 +570,6 @@ document.getElementById('addProjectBtn').addEventListener('click', async () => {
     if (projectResult.status === 'success' && taskResult.status === 'success') {
         alert(`Project "${newName}" added successfully with ID ${newID}. All 23 official tasks were loaded.`);
     } else {
-        // Give a more detailed error if one of the posts failed
         alert(`Failed to add project. Project Status: ${projectResult.status}. Task Status: ${taskResult.status}. Check the console for details.`);
     }
     
@@ -576,13 +580,16 @@ document.getElementById('deleteProjectBtn').addEventListener('click', () => {
     if (!currentProjectID) return alert('No project is selected.');
     const currentProject = allProjects.find(p => String(p.ProjectID).trim() === String(currentProjectID).trim());
     
-    // NOTE: Manual deletion is advised for comprehensive cleanup across multiple sheets.
+    // SheetDB supports DELETE requests (DELETE https://sheetdb.io/api/v1/YOUR_API_ID/ProjectID/HT-01)
+    // For safety, retaining the manual deletion prompt as this is a dashboard context.
     const confirmDelete = confirm(`WARNING: Deleting Project "${currentProject.Name}" requires manual removal of all associated data rows (Tasks, Expenses, Materials) from all four tabs in the Google Sheet. Proceed to the Google Sheet?`);
     
-    // NOTE: Using a custom modal/message box is preferred over confirm/alert in production.
     if (confirmDelete) {
+        // You would typically use a DELETE request for full automation:
+        // fetch(`${SHEET_API_URL}/ProjectID/${currentProjectID}?sheet=Projects`, { method: 'DELETE' });
+        
         window.open('https://docs.google.com/spreadsheets/', '_blank');
-        alert("Please manually delete the project data row from ALL 4 tabs in your Google Sheet.");
+        alert("Please manually delete the project data row from ALL 4 tabs in your Google Sheet (or implement the SheetDB DELETE request).");
     }
 });
 
