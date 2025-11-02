@@ -1,6 +1,5 @@
 // ==============================================================================
-// script.js: FINAL VERSION (SheetDB API Integration)
-// This version is compatible with the provided index.html and style.css
+// script.js: FINAL VERSION (SheetDB API Integration with Cache Fix)
 // ==============================================================================
 
 // 🎯 CRITICAL: PASTE YOUR WORKING SHEETDB API URL HERE!
@@ -44,7 +43,9 @@ const HI_TEK_TASKS_MAP = [
  * @returns {Promise<Array<Object>>} The data rows from the sheet.
  */
 const fetchDataFromSheet = async (sheetName) => {
-    const url = `${SHEET_API_URL}?sheet=${sheetName}`;
+    // 💡 FIX APPLIED HERE: Add a unique timestamp to the URL to prevent caching.
+    const cacheBuster = new Date().getTime();
+    const url = `${SHEET_API_URL}?sheet=${sheetName}&cache=${cacheBuster}`;
     try {
         const response = await fetch(url);
         if (!response.ok) {
@@ -450,6 +451,7 @@ document.getElementById('addProjectBtn').addEventListener('click', async () => {
         alert(`Failed to add project. Project Status: ${projectResult.status}. Task Status: ${taskResult.status}. Check the console for details.`);
     }
     
+    // loadProjects() is called here to reload the selector immediately
     await loadProjects();
 });
 
